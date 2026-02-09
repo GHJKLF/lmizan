@@ -3,6 +3,7 @@ import { ViewState, Transaction } from '@/types';
 import { DataService } from '@/services/dataService';
 import AppSidebar from '@/components/AppSidebar';
 import Dashboard from '@/components/dashboard/Dashboard';
+import TransactionTable from '@/components/transactions/TransactionTable';
 import { Loader2 } from 'lucide-react';
 
 const Index: React.FC = () => {
@@ -61,11 +62,13 @@ const Index: React.FC = () => {
           />
         </div>
 
-        {/* Transactions placeholder */}
+        {/* Transactions */}
         <div style={{ display: currentView === 'TRANSACTIONS' ? 'block' : 'none' }}>
-          <div className="flex items-center justify-center h-64 text-muted-foreground">
-            Transaction management coming in Phase 4
-          </div>
+          <TransactionTable
+            transactions={transactions}
+            selectedAccount={selectedAccount}
+            onRefresh={loadData}
+          />
         </div>
 
         {/* AI Insights placeholder */}
