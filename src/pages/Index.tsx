@@ -1,14 +1,11 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { ViewState, Transaction } from '@/types';
 import { DataService } from '@/services/dataService';
-import { useAuth } from '@/hooks/useAuth';
-import AuthPage from '@/components/AuthPage';
 import AppSidebar from '@/components/AppSidebar';
 import Dashboard from '@/components/dashboard/Dashboard';
 import { Loader2 } from 'lucide-react';
 
 const Index: React.FC = () => {
-  const { user, loading: authLoading, signOut } = useAuth();
   const [currentView, setCurrentView] = useState<ViewState>('DASHBOARD');
   const [selectedAccount, setSelectedAccount] = useState<string | 'ALL'>('ALL');
   const [transactions, setTransactions] = useState<Transaction[]>([]);
@@ -32,25 +29,13 @@ const Index: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    if (user) loadData();
-  }, [user, loadData]);
+    loadData();
+  }, [loadData]);
 
   const handleRenameAccount = async (oldName: string, newName: string) => {
     await DataService.renameAccount(oldName, newName);
     await loadData();
   };
-
-  if (authLoading) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-background">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-      </div>
-    );
-  }
-
-  if (!user) {
-    return <AuthPage />;
-  }
 
   return (
     <div className="flex min-h-screen bg-background">
@@ -61,7 +46,7 @@ const Index: React.FC = () => {
         onSelectAccount={setSelectedAccount}
         accounts={accounts}
         onRenameAccount={handleRenameAccount}
-        onLogout={signOut}
+        onLogout={() => {}}
         onOpenSettings={() => {}}
       />
 
