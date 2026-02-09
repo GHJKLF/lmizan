@@ -1,11 +1,8 @@
 import React, { useState } from 'react';
 import { Lock, Mail, Loader2, PieChart, AlertCircle } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
 
-interface AuthPageProps {
-  onLogin: (email: string, password: string) => Promise<void>;
-}
-
-const AuthPage: React.FC<AuthPageProps> = ({ onLogin }) => {
+const AuthPage: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -16,7 +13,8 @@ const AuthPage: React.FC<AuthPageProps> = ({ onLogin }) => {
     setIsLoading(true);
     setError(null);
     try {
-      await onLogin(email, password);
+      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      if (error) throw error;
     } catch (err: any) {
       setError(err.message || 'Invalid credentials');
     } finally {
