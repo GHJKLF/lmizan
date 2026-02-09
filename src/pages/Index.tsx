@@ -6,7 +6,10 @@ import Dashboard from '@/components/dashboard/Dashboard';
 import TransactionTable from '@/components/transactions/TransactionTable';
 import AIInsightsView from '@/components/ai/AIInsightsView';
 import ImportModal from '@/components/ai/ImportModal';
-import { Upload } from 'lucide-react';
+import UpdateBalanceModal from '@/components/modals/UpdateBalanceModal';
+import SettingsModal from '@/components/modals/SettingsModal';
+import PayoutReconciler from '@/components/modals/PayoutReconciler';
+import { Upload, Scale, ArrowLeftRight } from 'lucide-react';
 
 const Index: React.FC = () => {
   const [currentView, setCurrentView] = useState<ViewState>('DASHBOARD');
@@ -14,7 +17,12 @@ const Index: React.FC = () => {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [accounts, setAccounts] = useState<string[]>([]);
   const [txLoading, setTxLoading] = useState(true);
+
+  // Modal states
   const [importOpen, setImportOpen] = useState(false);
+  const [balanceOpen, setBalanceOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [reconcilerOpen, setReconcilerOpen] = useState(false);
 
   const loadData = useCallback(async () => {
     setTxLoading(true);
@@ -51,12 +59,26 @@ const Index: React.FC = () => {
         accounts={accounts}
         onRenameAccount={handleRenameAccount}
         onLogout={() => {}}
-        onOpenSettings={() => {}}
+        onOpenSettings={() => setSettingsOpen(true)}
       />
 
       <main className="flex-1 ml-72 p-6 overflow-auto">
-        {/* Import button — always visible */}
-        <div className="flex justify-end mb-4">
+        {/* Action bar */}
+        <div className="flex justify-end gap-2 mb-4">
+          <button
+            onClick={() => setReconcilerOpen(true)}
+            className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-foreground border border-border hover:bg-accent rounded-lg transition-colors"
+          >
+            <ArrowLeftRight size={14} />
+            Reconcile
+          </button>
+          <button
+            onClick={() => setBalanceOpen(true)}
+            className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-foreground border border-border hover:bg-accent rounded-lg transition-colors"
+          >
+            <Scale size={14} />
+            Update Balance
+          </button>
           <button
             onClick={() => setImportOpen(true)}
             className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-primary-foreground bg-primary hover:opacity-90 rounded-lg transition-opacity"
@@ -91,13 +113,11 @@ const Index: React.FC = () => {
         </div>
       </main>
 
-      {/* Import Modal */}
-      <ImportModal
-        transactions={transactions}
-        onImportComplete={loadData}
-        open={importOpen}
-        onClose={() => setImportOpen(false)}
-      />
+      {/* Modals */}
+      <ImportModal transactions={transactions} onImportComplete={loadData} open={importOpen} onClose={() => setImportOpen(false)} />
+      <UpdateBalanceModal transactions={transactions} open={balanceOpen} onClose={() => setBalanceOpen(false)} onComplete={loadData} />
+      <SettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} />
+      <PayoutReconciler transactions={transactions} open={reconcilerOpen} onClose={() => setReconcilerOpen(false)} />
     </div>
   );
 };
