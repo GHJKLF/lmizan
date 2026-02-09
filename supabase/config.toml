@@ -1,1 +1,10 @@
 project_id = "bxrxrdloufobxdkdehtc"
+
+[functions.ai-chat]
+verify_jwt = false
+
+[functions.ai-audit]
+verify_jwt = false
+
+[functions.ai-import]
+verify_jwt = false

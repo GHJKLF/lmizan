@@ -4,7 +4,9 @@ import { DataService } from '@/services/dataService';
 import AppSidebar from '@/components/AppSidebar';
 import Dashboard from '@/components/dashboard/Dashboard';
 import TransactionTable from '@/components/transactions/TransactionTable';
-import { Loader2 } from 'lucide-react';
+import AIInsightsView from '@/components/ai/AIInsightsView';
+import ImportModal from '@/components/ai/ImportModal';
+import { Upload } from 'lucide-react';
 
 const Index: React.FC = () => {
   const [currentView, setCurrentView] = useState<ViewState>('DASHBOARD');
@@ -12,6 +14,7 @@ const Index: React.FC = () => {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [accounts, setAccounts] = useState<string[]>([]);
   const [txLoading, setTxLoading] = useState(true);
+  const [importOpen, setImportOpen] = useState(false);
 
   const loadData = useCallback(async () => {
     setTxLoading(true);
@@ -52,6 +55,17 @@ const Index: React.FC = () => {
       />
 
       <main className="flex-1 ml-72 p-6 overflow-auto">
+        {/* Import button — always visible */}
+        <div className="flex justify-end mb-4">
+          <button
+            onClick={() => setImportOpen(true)}
+            className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-primary-foreground bg-primary hover:opacity-90 rounded-lg transition-opacity"
+          >
+            <Upload size={14} />
+            Import
+          </button>
+        </div>
+
         {/* Dashboard */}
         <div style={{ display: currentView === 'DASHBOARD' ? 'block' : 'none' }}>
           <Dashboard
@@ -71,13 +85,19 @@ const Index: React.FC = () => {
           />
         </div>
 
-        {/* AI Insights placeholder */}
+        {/* AI Insights */}
         <div style={{ display: currentView === 'AI_INSIGHTS' ? 'block' : 'none' }}>
-          <div className="flex items-center justify-center h-64 text-muted-foreground">
-            AI Analyst coming in Phase 5
-          </div>
+          <AIInsightsView transactions={transactions} />
         </div>
       </main>
+
+      {/* Import Modal */}
+      <ImportModal
+        transactions={transactions}
+        onImportComplete={loadData}
+        open={importOpen}
+        onClose={() => setImportOpen(false)}
+      />
     </div>
   );
 };
