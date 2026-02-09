@@ -50,59 +50,55 @@ const isAuthenticated = async (): Promise<string | null> => {
 
 export const DataService = {
   async fetchTransactions(): Promise<Transaction[]> {
-    const userId = await isAuthenticated();
-    if (userId) {
-      let allRows: any[] = [];
-      let from = 0;
-      const batchSize = 1000;
-      let done = false;
+    let allRows: any[] = [];
+    let from = 0;
+    const batchSize = 1000;
+    let done = false;
 
-      while (!done) {
-        const { data, error } = await supabase
-          .from('transactions')
-          .select('*')
-          .range(from, from + batchSize - 1);
+    while (!done) {
+      const { data, error } = await supabase
+        .from('transactions')
+        .select('*')
+        .range(from, from + batchSize - 1);
 
-        if (error) {
-          console.error('Error fetching transactions batch:', error);
-          break;
-        }
-
-        if (!data || data.length === 0) {
-          done = true;
-        } else {
-          allRows = allRows.concat(data);
-          from += batchSize;
-          if (data.length < batchSize) done = true;
-        }
-
-        if (from > 100000) done = true;
+      if (error) {
+        console.error('Error fetching transactions batch:', error);
+        break;
       }
 
-      return allRows.map((row: any) => ({
-        id: row.id,
-        date: row.date,
-        description: row.description,
-        category: row.category,
-        amount: row.amount,
-        currency: row.currency as Currency,
-        account: row.account,
-        type: row.type as TransactionType,
-        notes: row.notes,
-        runningBalance: row.running_balance,
-        balanceAvailable: row.balance_available,
-        balanceReserved: row.balance_reserved,
-      }));
-    } else {
-      const saved = localStorage.getItem(LS_TX_KEY);
-      return saved ? JSON.parse(saved) : [];
+      if (!data || data.length === 0) {
+        done = true;
+      } else {
+        allRows = allRows.concat(data);
+        from += batchSize;
+        if (data.length < batchSize) done = true;
+      }
+
+      if (from > 100000) done = true;
     }
+
+    return allRows.map((row: any) => ({
+      id: row.id,
+      date: row.date,
+      description: row.description,
+      category: row.category,
+      amount: row.amount,
+      currency: row.currency as Currency,
+      account: row.account,
+      type: row.type as TransactionType,
+      notes: row.notes,
+      runningBalance: row.running_balance,
+      balanceAvailable: row.balance_available,
+      balanceReserved: row.balance_reserved,
+    }));
   },
 
   async fetchAccounts(): Promise<string[]> {
+    const { data } = await supabase.from('accounts').select('name');
+    const dbAccounts = data?.map((r: any) => r.name).filter(Boolean) || [];
     const saved = localStorage.getItem(LS_ACCOUNTS_KEY);
     const storedAccounts = saved ? JSON.parse(saved) : [];
-    return Array.from(new Set([...ACCOUNTS, ...storedAccounts]));
+    return Array.from(new Set([...ACCOUNTS, ...dbAccounts, ...storedAccounts]));
   },
 
   getAccountMappings(): Record<string, string> {

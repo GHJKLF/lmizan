@@ -14,54 +14,69 @@ export type Database = {
   }
   public: {
     Tables: {
+      accounts: {
+        Row: {
+          created_at: string | null
+          id: number
+          name: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          id?: number
+          name?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          id?: number
+          name?: string | null
+        }
+        Relationships: []
+      }
       transactions: {
         Row: {
-          account: string
-          amount: number
+          account: string | null
+          amount: number | null
           balance_available: number | null
           balance_reserved: number | null
-          category: string
+          category: string | null
           created_at: string
-          currency: string
-          date: string
-          description: string
+          currency: string | null
+          date: string | null
+          description: string | null
           id: string
           notes: string | null
           running_balance: number | null
-          type: string
-          user_id: string
+          type: string | null
         }
         Insert: {
-          account?: string
-          amount?: number
+          account?: string | null
+          amount?: number | null
           balance_available?: number | null
           balance_reserved?: number | null
-          category?: string
+          category?: string | null
           created_at?: string
-          currency?: string
-          date: string
-          description?: string
+          currency?: string | null
+          date?: string | null
+          description?: string | null
           id: string
           notes?: string | null
           running_balance?: number | null
-          type?: string
-          user_id: string
+          type?: string | null
         }
         Update: {
-          account?: string
-          amount?: number
+          account?: string | null
+          amount?: number | null
           balance_available?: number | null
           balance_reserved?: number | null
-          category?: string
+          category?: string | null
           created_at?: string
-          currency?: string
-          date?: string
-          description?: string
+          currency?: string | null
+          date?: string | null
+          description?: string | null
           id?: string
           notes?: string | null
           running_balance?: number | null
-          type?: string
-          user_id?: string
+          type?: string | null
         }
         Relationships: []
       }
