@@ -56,11 +56,18 @@ const ImportModal: React.FC<Props> = ({ transactions, accounts, onImportComplete
     try {
       const content = await readFileContent(file);
 
+      // Get session token for authenticated request
+      const { supabase } = await import("@/integrations/supabase/client");
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) {
+        throw new Error("Not authenticated. Please log in.");
+      }
+
       const resp = await fetch(IMPORT_URL, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+          Authorization: `Bearer ${session.access_token}`,
         },
         body: JSON.stringify({
           fileContent: content,
