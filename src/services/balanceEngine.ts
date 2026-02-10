@@ -54,7 +54,11 @@ export const computeAccountSummaries = (transactions: Transaction[]): AccountSum
 
   accountMap.forEach((txs, account) => {
     // Sort by date descending to get latest
-    const sorted = [...txs].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    const sorted = [...txs].sort((a, b) => {
+      const d = new Date(b.date).getTime() - new Date(a.date).getTime();
+      if (d !== 0) return d;
+      return new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime();
+    });
     const latest = sorted[0];
     const currency = latest.currency;
 
@@ -81,7 +85,7 @@ export const computeAccountSummaries = (transactions: Transaction[]): AccountSum
     }
 
     summaries.push({
-      account,
+      account: latest.account,
       currency,
       total,
       available,

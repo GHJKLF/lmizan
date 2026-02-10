@@ -90,15 +90,19 @@ export const DataService = {
       runningBalance: row.running_balance,
       balanceAvailable: row.balance_available,
       balanceReserved: row.balance_reserved,
+      createdAt: row.created_at,
     }));
   },
 
   async fetchAccounts(): Promise<string[]> {
-    const { data } = await supabase.from('accounts').select('name');
-    const dbAccounts = data?.map((r: any) => r.name).filter(Boolean) || [];
-    const saved = localStorage.getItem(LS_ACCOUNTS_KEY);
-    const storedAccounts = saved ? JSON.parse(saved) : [];
-    return Array.from(new Set([...ACCOUNTS, ...dbAccounts, ...storedAccounts]));
+    const { data, error } = await supabase
+      .from('transactions')
+      .select('account')
+      .not('account', 'is', null);
+
+    if (error || !data) return [];
+    const unique = [...new Set(data.map((r: any) => r.account as string).filter(Boolean))];
+    return unique.sort();
   },
 
   getAccountMappings(): Record<string, string> {
