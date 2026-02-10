@@ -1,6 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { Transaction, Currency, TransactionType } from '@/types';
-import { DataService, generateFingerprint } from '@/services/dataService';
+import { DataService, generateWeakFingerprint } from '@/services/dataService';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { toast } from 'sonner';
 import {
@@ -90,10 +90,10 @@ const ImportModal: React.FC<Props> = ({ transactions, accounts, onImportComplete
       }));
 
       // Duplicate detection
-      const existingFingerprints = new Set(transactions.map(generateFingerprint));
+      const existingFingerprints = new Set(transactions.map(generateWeakFingerprint));
       const dupes = new Set<number>();
       parsed.forEach((t, i) => {
-        if (existingFingerprints.has(generateFingerprint(t))) dupes.add(i);
+        if (existingFingerprints.has(generateWeakFingerprint(t))) dupes.add(i);
       });
 
       setPreview(parsed);
