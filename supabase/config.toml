@@ -17,3 +17,6 @@ verify_jwt = false
 
 [functions.wise-balances]
 verify_jwt = false
+
+[functions.wise-discover]
+verify_jwt = false
