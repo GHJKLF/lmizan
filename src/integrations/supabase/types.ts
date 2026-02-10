@@ -95,6 +95,7 @@ export type Database = {
           currency: string
           id: string
           last_synced_at: string | null
+          private_key: string | null
           profile_id: string
           updated_at: string
           user_id: string
@@ -108,6 +109,7 @@ export type Database = {
           currency?: string
           id?: string
           last_synced_at?: string | null
+          private_key?: string | null
           profile_id: string
           updated_at?: string
           user_id: string
@@ -121,6 +123,7 @@ export type Database = {
           currency?: string
           id?: string
           last_synced_at?: string | null
+          private_key?: string | null
           profile_id?: string
           updated_at?: string
           user_id?: string
@@ -177,6 +180,7 @@ export type Database = {
           currency: string
           id: string
           last_synced_at: string
+          private_key: string
           profile_id: string
           user_id: string
           webhook_secret: string

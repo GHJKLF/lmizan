@@ -5,13 +5,11 @@ import { DataService } from '@/services/dataService';
 import { toast } from 'sonner';
 import {
   ArrowLeft,
-  Plus,
   Trash2,
   RefreshCw,
   CheckCircle,
   Loader2,
   Wifi,
-  X,
   Eye,
   ChevronDown,
 } from 'lucide-react';
@@ -20,6 +18,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from '@/components/ui/popover';
+import WiseConnectionWizard from '@/components/WiseConnectionWizard';
 
 interface WiseConnection {
   id: string;
@@ -40,33 +39,20 @@ interface WiseBalance {
 const Settings: React.FC = () => {
   const navigate = useNavigate();
   const [connections, setConnections] = useState<WiseConnection[]>([]);
-  const [accounts, setAccounts] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [syncingId, setSyncingId] = useState<string | null>(null);
   const [testingId, setTestingId] = useState<string | null>(null);
-  const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState({
-    account_name: '',
-    api_token: '',
-    profile_id: '',
-    balance_id: '',
-    currency: 'EUR',
-  });
-  const [saving, setSaving] = useState(false);
+  const [wizardOpen, setWizardOpen] = useState(false);
   const [balancesLoading, setBalancesLoading] = useState<string | null>(null);
   const [balancesData, setBalancesData] = useState<{ connId: string; balances: WiseBalance[] } | null>(null);
 
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      const [accs, { data: conns }] = await Promise.all([
-        DataService.fetchAccounts(),
-        supabase
-          .from('wise_connections_safe' as any)
-          .select('id, account_name, profile_id, balance_id, currency, last_synced_at, created_at')
-          .order('created_at', { ascending: false }),
-      ]);
-      setAccounts(accs);
+      const { data: conns } = await supabase
+        .from('wise_connections_safe' as any)
+        .select('id, account_name, profile_id, balance_id, currency, last_synced_at, created_at')
+        .order('created_at', { ascending: false });
       setConnections((conns as unknown as WiseConnection[]) || []);
     } catch (e) {
       console.error(e);
@@ -78,38 +64,6 @@ const Settings: React.FC = () => {
   useEffect(() => {
     loadData();
   }, [loadData]);
-
-  const handleAdd = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!form.account_name || !form.api_token || !form.profile_id || !form.balance_id) {
-      toast.error('All fields are required');
-      return;
-    }
-    setSaving(true);
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) { toast.error('Not authenticated'); return; }
-
-      const { error } = await supabase.from('wise_connections').insert({
-        user_id: user.id,
-        account_name: form.account_name,
-        api_token: form.api_token,
-        profile_id: form.profile_id,
-        balance_id: form.balance_id,
-        currency: form.currency,
-        webhook_secret: crypto.randomUUID().replace(/-/g, '') + crypto.randomUUID().replace(/-/g, ''),
-      } as any);
-      if (error) throw error;
-      toast.success('Wise connection added');
-      setShowForm(false);
-      setForm({ account_name: '', api_token: '', profile_id: '', balance_id: '', currency: 'EUR' });
-      await loadData();
-    } catch (err: any) {
-      toast.error(err.message || 'Failed to add connection');
-    } finally {
-      setSaving(false);
-    }
-  };
 
   const handleDelete = async (id: string) => {
     if (!confirm('Delete this Wise connection?')) return;
@@ -190,11 +144,11 @@ const Settings: React.FC = () => {
               Wise Integrations
             </h2>
             <button
-              onClick={() => setShowForm(true)}
+              onClick={() => setWizardOpen(true)}
               className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-primary-foreground bg-primary hover:opacity-90 rounded-lg transition-opacity"
             >
-              <Plus size={14} />
-              Add Connection
+              <Wifi size={14} />
+              Connect Wise Account
             </button>
           </div>
 
@@ -206,7 +160,7 @@ const Settings: React.FC = () => {
             <div className="text-center py-12 text-muted-foreground border border-dashed border-border rounded-xl">
               <Wifi size={32} className="mx-auto mb-3 opacity-40" />
               <p className="text-sm">No Wise connections configured yet.</p>
-              <p className="text-xs mt-1">Add one to start syncing transactions.</p>
+              <p className="text-xs mt-1">Connect your Wise account to start syncing transactions.</p>
             </div>
           ) : (
             <div className="space-y-3">
@@ -340,97 +294,11 @@ const Settings: React.FC = () => {
           )}
         </section>
 
-        {/* Add Connection Modal */}
-        {showForm && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
-            <div className="bg-card rounded-xl w-full max-w-md shadow-2xl">
-              <div className="flex items-center justify-between p-5 border-b border-border">
-                <h3 className="font-bold text-foreground">Add Wise Connection</h3>
-                <button onClick={() => setShowForm(false)} className="text-muted-foreground hover:text-foreground">
-                  <X size={18} />
-                </button>
-              </div>
-              <form onSubmit={handleAdd} className="p-5 space-y-4">
-                <div>
-                  <label className="block text-xs font-bold text-muted-foreground uppercase mb-1">Account</label>
-                  <select
-                    required
-                    value={form.account_name}
-                    onChange={(e) => setForm(f => ({ ...f, account_name: e.target.value }))}
-                    className="w-full p-2 border border-input rounded-lg bg-background text-sm"
-                  >
-                    <option value="">Select account...</option>
-                    {accounts.map(a => (
-                      <option key={a} value={a}>{a}</option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-muted-foreground uppercase mb-1">API Token</label>
-                  <input
-                    type="password"
-                    required
-                    value={form.api_token}
-                    onChange={(e) => setForm(f => ({ ...f, api_token: e.target.value }))}
-                    className="w-full p-2 border border-input rounded-lg bg-background text-sm"
-                    placeholder="Wise Personal API Token"
-                  />
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-xs font-bold text-muted-foreground uppercase mb-1">Profile ID</label>
-                    <input
-                      type="text"
-                      required
-                      value={form.profile_id}
-                      onChange={(e) => setForm(f => ({ ...f, profile_id: e.target.value }))}
-                      className="w-full p-2 border border-input rounded-lg bg-background text-sm"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-bold text-muted-foreground uppercase mb-1">Balance ID</label>
-                    <input
-                      type="text"
-                      required
-                      value={form.balance_id}
-                      onChange={(e) => setForm(f => ({ ...f, balance_id: e.target.value }))}
-                      className="w-full p-2 border border-input rounded-lg bg-background text-sm"
-                    />
-                  </div>
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-muted-foreground uppercase mb-1">Currency</label>
-                  <select
-                    value={form.currency}
-                    onChange={(e) => setForm(f => ({ ...f, currency: e.target.value }))}
-                    className="w-full p-2 border border-input rounded-lg bg-background text-sm"
-                  >
-                    {['EUR', 'USD', 'GBP', 'MAD', 'ILS', 'DKK', 'SEK'].map(c => (
-                      <option key={c} value={c}>{c}</option>
-                    ))}
-                  </select>
-                </div>
-                <div className="flex gap-2 justify-end pt-2">
-                  <button
-                    type="button"
-                    onClick={() => setShowForm(false)}
-                    className="px-4 py-2 text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-accent rounded-lg"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={saving}
-                    className="px-4 py-2 text-sm font-bold text-primary-foreground bg-primary rounded-lg hover:opacity-90 disabled:opacity-50 flex items-center gap-1.5"
-                  >
-                    {saving && <Loader2 size={14} className="animate-spin" />}
-                    Add Connection
-                  </button>
-                </div>
-              </form>
-            </div>
-          </div>
-        )}
+        <WiseConnectionWizard
+          open={wizardOpen}
+          onOpenChange={setWizardOpen}
+          onComplete={loadData}
+        />
       </div>
     </div>
   );
