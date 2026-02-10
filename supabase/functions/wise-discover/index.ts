@@ -80,7 +80,7 @@ Deno.serve(async (req) => {
           id: p.id,
           fullName: p.type === "PERSONAL"
             ? `${p.details?.firstName || ""} ${p.details?.lastName || ""}`.trim()
-            : p.details?.name || p.details?.companyName || p.details?.tradingName || `Profile ${p.id}`,
+            : p.details?.name || `Profile ${p.id}`,
           type: p.type,
           balances: (balances || []).map((b: any) => ({
             id: b.id,

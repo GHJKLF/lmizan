@@ -20,6 +20,3 @@ verify_jwt = false
 
 [functions.wise-discover]
 verify_jwt = false
-
-[functions.wise-upload-key]
-verify_jwt = false
