@@ -45,21 +45,46 @@ export const computeAccountSummaries = (transactions: Transaction[]): AccountSum
   const accountMap = new Map<string, Transaction[]>();
 
   transactions.forEach((tx) => {
-    const key = `${tx.account}-${tx.currency}`;
+    const normalizedCurrency = tx.currency.toUpperCase() as Currency;
+    const key = `${tx.account}-${normalizedCurrency}`;
     if (!accountMap.has(key)) accountMap.set(key, []);
-    accountMap.get(key)!.push(tx);
+    accountMap.get(key)!.push({ ...tx, currency: normalizedCurrency });
   });
 
   const summaries: AccountSummary[] = [];
 
   accountMap.forEach((txs, account) => {
-    // Sort by date descending to get latest
+    // Sort by date descending to get latest date
     const sorted = [...txs].sort((a, b) => {
       const d = new Date(b.date).getTime() - new Date(a.date).getTime();
       if (d !== 0) return d;
       return new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime();
     });
-    const latest = sorted[0];
+
+    // Get all transactions on the latest date
+    const latestDate = sorted[0].date;
+    const sameDateTxs = sorted.filter((tx) => tx.date === latestDate);
+
+    let latest = sameDateTxs[0];
+    if (sameDateTxs.length > 1 && sameDateTxs.some((tx) => tx.runningBalance !== undefined && tx.runningBalance !== null)) {
+      const withBalance = sameDateTxs.filter((tx) => tx.runningBalance !== undefined && tx.runningBalance !== null);
+      // T is "last in chain" if no other S exists where
+      // T.runningBalance == S.runningBalance + abs(S.amount) (outflow) or
+      // T.runningBalance == S.runningBalance - abs(S.amount) (inflow)
+      // i.e., T is not a predecessor of any other transaction
+      const isLast = (t: typeof withBalance[0]) => {
+        return !withBalance.some((s) => {
+          if (s === t) return false;
+          const expected = s.type === 'Outflow'
+            ? s.runningBalance! + Math.abs(s.amount)
+            : s.runningBalance! - Math.abs(s.amount);
+          return Math.abs(t.runningBalance! - expected) < 0.01;
+        });
+      };
+      const lastInChain = withBalance.find(isLast);
+      latest = lastInChain ?? withBalance[0];
+    }
+
     const currency = latest.currency;
 
     // Use runningBalance if available, otherwise compute from inflows/outflows
