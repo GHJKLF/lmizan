@@ -13,11 +13,10 @@ async function fetchAllTransfers(
   intervalEnd: string
 ): Promise<any[]> {
   const all: any[] = [];
-  const limit = 50;
-  const maxPages = 4;
+  const limit = 100;
+  let offset = 0;
 
-  for (let page = 0; page < maxPages; page++) {
-    const offset = page * limit;
+  while (true) {
     const url = `https://api.transferwise.com/v1/transfers?profile=${profileId}&limit=${limit}&offset=${offset}&createdDateStart=${encodeURIComponent(intervalStart)}&createdDateEnd=${encodeURIComponent(intervalEnd)}`;
     const res = await fetch(url, {
       headers: { Authorization: `Bearer ${token}` },
@@ -32,6 +31,7 @@ async function fetchAllTransfers(
     if (!Array.isArray(data) || data.length === 0) break;
     all.push(...data);
     if (data.length < limit) break;
+    offset += limit;
   }
 
   return all;
@@ -70,7 +70,7 @@ Deno.serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
-    const { wise_connection_id } = await req.json();
+    const { wise_connection_id, full_sync } = await req.json();
     if (!wise_connection_id) {
       return new Response(
         JSON.stringify({ error: "wise_connection_id is required" }),
@@ -89,11 +89,12 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Date range: use last_synced_at or default to 12 months ago
     const intervalEnd = new Date().toISOString();
-    const intervalStart = conn.last_synced_at
-      ? new Date(conn.last_synced_at).toISOString()
-      : new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString();
+    const intervalStart = full_sync
+      ? "2020-01-01T00:00:00.000Z"
+      : conn.last_synced_at
+        ? new Date(conn.last_synced_at).toISOString()
+        : "2020-01-01T00:00:00.000Z";
 
     const transfers = await fetchAllTransfers(
       conn.profile_id,
@@ -114,7 +115,7 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Fetch existing fingerprints for dedup (using transfer.id stored in notes or description)
+    // Fetch existing fingerprints for dedup
     const { data: existingTxs } = await supabaseAdmin
       .from("transactions")
       .select("notes")

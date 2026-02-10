@@ -12,7 +12,14 @@ import {
   Loader2,
   Wifi,
   X,
+  Eye,
+  ChevronDown,
 } from 'lucide-react';
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover';
 
 interface WiseConnection {
   id: string;
@@ -22,6 +29,12 @@ interface WiseConnection {
   currency: string;
   last_synced_at: string | null;
   created_at: string;
+}
+
+interface WiseBalance {
+  id: number;
+  currency: string;
+  amount: number;
 }
 
 const Settings: React.FC = () => {
@@ -40,6 +53,8 @@ const Settings: React.FC = () => {
     currency: 'EUR',
   });
   const [saving, setSaving] = useState(false);
+  const [balancesLoading, setBalancesLoading] = useState<string | null>(null);
+  const [balancesData, setBalancesData] = useState<{ connId: string; balances: WiseBalance[] } | null>(null);
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -103,12 +118,11 @@ const Settings: React.FC = () => {
     else { toast.success('Connection deleted'); await loadData(); }
   };
 
-  const handleSync = async (id: string) => {
+  const handleSync = async (id: string, fullSync = false) => {
     setSyncingId(id);
     try {
-      const { data: { session } } = await supabase.auth.getSession();
       const res = await supabase.functions.invoke('wise-sync', {
-        body: { wise_connection_id: id, days_back: 90 },
+        body: { wise_connection_id: id, full_sync: fullSync },
       });
       if (res.error) throw res.error;
       const result = res.data;
@@ -124,9 +138,8 @@ const Settings: React.FC = () => {
   const handleTest = async (id: string) => {
     setTestingId(id);
     try {
-      // Test by doing a 1-day sync via edge function (no need to read api_token client-side)
       const res = await supabase.functions.invoke('wise-sync', {
-        body: { wise_connection_id: id, days_back: 1 },
+        body: { wise_connection_id: id, full_sync: false },
       });
       if (res.error) throw res.error;
       toast.success('Connection is working! ✓');
@@ -134,6 +147,21 @@ const Settings: React.FC = () => {
       toast.error(`Connection test failed: ${err.message || 'Unknown error'}`);
     } finally {
       setTestingId(null);
+    }
+  };
+
+  const handleViewBalances = async (id: string) => {
+    setBalancesLoading(id);
+    try {
+      const res = await supabase.functions.invoke('wise-balances', {
+        body: { wise_connection_id: id },
+      });
+      if (res.error) throw res.error;
+      setBalancesData({ connId: id, balances: res.data.balances || [] });
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to fetch balances');
+    } finally {
+      setBalancesLoading(null);
     }
   };
 
@@ -204,6 +232,45 @@ const Settings: React.FC = () => {
                     </p>
                   </div>
                   <div className="flex items-center gap-1.5 ml-3">
+                    {/* View Balances */}
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <button
+                          onClick={() => handleViewBalances(conn.id)}
+                          disabled={balancesLoading === conn.id}
+                          className="p-2 text-muted-foreground hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors disabled:opacity-50"
+                          title="View Balances"
+                        >
+                          {balancesLoading === conn.id ? (
+                            <Loader2 size={14} className="animate-spin" />
+                          ) : (
+                            <Eye size={14} />
+                          )}
+                        </button>
+                      </PopoverTrigger>
+                      {balancesData?.connId === conn.id && (
+                        <PopoverContent className="w-64 p-0" align="end">
+                          <div className="p-3 border-b border-border">
+                            <p className="text-xs font-bold text-foreground">Wise Balances</p>
+                          </div>
+                          {balancesData.balances.length === 0 ? (
+                            <p className="p-3 text-xs text-muted-foreground">No balances found.</p>
+                          ) : (
+                            <div className="p-2 space-y-1">
+                              {balancesData.balances.map((b) => (
+                                <div key={b.id} className="flex items-center justify-between px-2 py-1.5 rounded-md hover:bg-accent">
+                                  <span className="text-xs font-medium text-foreground">{b.currency}</span>
+                                  <span className="text-xs font-semibold text-foreground">
+                                    {b.amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </PopoverContent>
+                      )}
+                    </Popover>
+                    {/* Test */}
                     <button
                       onClick={() => handleTest(conn.id)}
                       disabled={testingId === conn.id}
@@ -216,18 +283,49 @@ const Settings: React.FC = () => {
                         <CheckCircle size={14} />
                       )}
                     </button>
-                    <button
-                      onClick={() => handleSync(conn.id)}
-                      disabled={syncingId === conn.id}
-                      className="p-2 text-muted-foreground hover:text-primary hover:bg-primary/10 rounded-lg transition-colors disabled:opacity-50"
-                      title="Sync Now"
-                    >
-                      {syncingId === conn.id ? (
-                        <Loader2 size={14} className="animate-spin" />
-                      ) : (
-                        <RefreshCw size={14} />
-                      )}
-                    </button>
+                    {/* Sync with dropdown */}
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <div className="flex items-center">
+                          <button
+                            onClick={() => handleSync(conn.id, false)}
+                            disabled={syncingId === conn.id}
+                            className="p-2 text-muted-foreground hover:text-primary hover:bg-primary/10 rounded-l-lg transition-colors disabled:opacity-50"
+                            title="Sync Now"
+                          >
+                            {syncingId === conn.id ? (
+                              <Loader2 size={14} className="animate-spin" />
+                            ) : (
+                              <RefreshCw size={14} />
+                            )}
+                          </button>
+                          <button
+                            disabled={syncingId === conn.id}
+                            className="p-2 text-muted-foreground hover:text-primary hover:bg-primary/10 rounded-r-lg transition-colors disabled:opacity-50 border-l border-border"
+                            title="Sync options"
+                          >
+                            <ChevronDown size={10} />
+                          </button>
+                        </div>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-44 p-1" align="end">
+                        <button
+                          onClick={() => handleSync(conn.id, false)}
+                          disabled={syncingId === conn.id}
+                          className="w-full text-left px-3 py-2 text-xs rounded-md hover:bg-accent text-foreground"
+                        >
+                          Sync (incremental)
+                        </button>
+                        <button
+                          onClick={() => handleSync(conn.id, true)}
+                          disabled={syncingId === conn.id}
+                          className="w-full text-left px-3 py-2 text-xs rounded-md hover:bg-accent text-foreground"
+                        >
+                          Full Sync (from 2020)
+                        </button>
+                      </PopoverContent>
+                    </Popover>
+                    {/* Delete */}
                     <button
                       onClick={() => handleDelete(conn.id)}
                       className="p-2 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-lg transition-colors"
