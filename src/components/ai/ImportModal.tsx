@@ -1,7 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { Transaction, Currency, TransactionType } from '@/types';
 import { DataService, generateFingerprint } from '@/services/dataService';
-import { ACCOUNTS } from '@/constants';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { toast } from 'sonner';
 import {
@@ -16,6 +15,7 @@ import {
 
 interface Props {
   transactions: Transaction[];
+  accounts: string[];
   onImportComplete: () => Promise<void>;
   open: boolean;
   onClose: () => void;
@@ -23,9 +23,9 @@ interface Props {
 
 const IMPORT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ai-import`;
 
-const ImportModal: React.FC<Props> = ({ transactions, onImportComplete, open, onClose }) => {
+const ImportModal: React.FC<Props> = ({ transactions, accounts, onImportComplete, open, onClose }) => {
   const [file, setFile] = useState<File | null>(null);
-  const [accountHint, setAccountHint] = useState(ACCOUNTS[0]);
+  const [accountHint, setAccountHint] = useState(accounts[0] || '');
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [preview, setPreview] = useState<Transaction[] | null>(null);
@@ -159,7 +159,7 @@ const ImportModal: React.FC<Props> = ({ transactions, onImportComplete, open, on
                   onChange={(e) => setAccountHint(e.target.value)}
                   className="w-full px-3 py-2 text-sm border border-input rounded-lg bg-background"
                 >
-                  {ACCOUNTS.map((a) => (
+                  {accounts.map((a) => (
                     <option key={a} value={a}>{a}</option>
                   ))}
                 </select>

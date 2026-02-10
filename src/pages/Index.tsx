@@ -114,7 +114,7 @@ const Index: React.FC = () => {
       </main>
 
       {/* Modals */}
-      <ImportModal transactions={transactions} onImportComplete={loadData} open={importOpen} onClose={() => setImportOpen(false)} />
+      <ImportModal transactions={transactions} accounts={accounts} onImportComplete={loadData} open={importOpen} onClose={() => setImportOpen(false)} />
       <UpdateBalanceModal transactions={transactions} open={balanceOpen} onClose={() => setBalanceOpen(false)} onComplete={loadData} />
       <SettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} />
       <PayoutReconciler transactions={transactions} open={reconcilerOpen} onClose={() => setReconcilerOpen(false)} />
