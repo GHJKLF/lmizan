@@ -98,7 +98,8 @@ export const DataService = {
     const { data, error } = await supabase
       .from('transactions')
       .select('account')
-      .not('account', 'is', null);
+      .not('account', 'is', null)
+      .not('running_balance', 'is', null);
 
     if (error || !data) return [];
     const unique = [...new Set(data.map((r: any) => r.account as string).filter(Boolean))];
