@@ -76,11 +76,12 @@ Deno.serve(async (req) => {
         if (balRes.ok) {
           balances = await balRes.json();
         }
+        const fullName = p.type === "PERSONAL"
+          ? (`${p.details?.firstName || ""} ${p.details?.lastName || ""}`.trim() || `Profile ${p.id}`)
+          : (p.details?.companyName || p.details?.tradingName || p.details?.name || `Profile ${p.id}`);
         return {
           id: p.id,
-          fullName: p.type === "PERSONAL"
-            ? `${p.details?.firstName || ""} ${p.details?.lastName || ""}`.trim()
-            : p.details?.name || `Profile ${p.id}`,
+          fullName,
           type: p.type,
           balances: (balances || []).map((b: any) => ({
             id: b.id,
