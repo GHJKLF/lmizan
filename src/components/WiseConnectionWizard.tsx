@@ -173,9 +173,10 @@ const WiseConnectionWizard: React.FC<Props> = ({ open, onOpenChange, onComplete 
       for (const bal of newBalances) {
         const keys = keyMap.get(bal.profileId)!;
         try {
+          const accountDisplayName = `Wise ${bal.profileName}`;
           const { error } = await supabase.from('wise_connections').insert({
             user_id: user.id,
-            account_name: bal.profileName,
+            account_name: accountDisplayName,
             api_token: apiToken.trim(),
             profile_id: String(bal.profileId),
             balance_id: String(bal.balanceId),
