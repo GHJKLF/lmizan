@@ -15,7 +15,6 @@ import {
   Loader2,
   CheckCircle,
   XCircle,
-  Copy,
   ArrowRight,
   ArrowLeft,
   KeyRound,
@@ -148,13 +147,17 @@ const WiseConnectionWizard: React.FC<Props> = ({ open, onOpenChange, onComplete 
     setStep(3);
   };
 
-  const copyPublicKey = async () => {
-    try {
-      await navigator.clipboard.writeText(publicKeyPem);
-      toast.success('Public key copied');
-    } catch {
-      toast.error('Failed to copy');
-    }
+  const downloadPublicKey = () => {
+    const blob = new Blob([publicKeyPem], { type: 'application/x-pem-file' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'lmizan-wise-public-key.pem';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    toast.success('Public key downloaded');
   };
 
   const handleConnect = async () => {
@@ -184,7 +187,7 @@ const WiseConnectionWizard: React.FC<Props> = ({ open, onOpenChange, onComplete 
       try {
         const { error } = await supabase.from('wise_connections').insert({
           user_id: user.id,
-          account_name: sel.profileName,
+          account_name: `Wise ${sel.profileName}`,
           api_token: apiToken.trim(),
           profile_id: String(sel.profileId),
           balance_id: String(sel.balanceId),
@@ -376,33 +379,17 @@ const WiseConnectionWizard: React.FC<Props> = ({ open, onOpenChange, onComplete 
               </div>
             ) : (
               <>
-                <div>
-                  <label className="block text-xs font-bold text-muted-foreground uppercase mb-1.5">
-                    Public Key (copy this)
-                  </label>
-                  <div className="relative">
-                    <textarea
-                      readOnly
-                      value={publicKeyPem}
-                      rows={6}
-                      className="w-full p-3 pr-12 border border-input rounded-lg bg-muted/30 text-xs font-mono resize-none"
-                    />
-                    <button
-                      onClick={copyPublicKey}
-                      className="absolute top-2 right-2 p-1.5 rounded-md hover:bg-accent text-muted-foreground hover:text-foreground transition-colors"
-                      title="Copy to clipboard"
-                    >
-                      <Copy size={14} />
-                    </button>
-                  </div>
-                </div>
+                <Button onClick={downloadPublicKey} variant="outline" className="w-full">
+                  <KeyRound size={16} className="mr-2" />
+                  Download Public Key (.pem)
+                </Button>
                 <div className="p-3 rounded-lg bg-muted/50 border border-border space-y-1.5">
                   <p className="text-xs font-semibold text-foreground flex items-center gap-1.5">
                     <KeyRound size={12} /> Upload to Wise
                   </p>
                   <p className="text-xs text-muted-foreground leading-relaxed">
-                    Go to <span className="font-medium text-foreground">wise.com → Settings → API tokens → Manage public keys</span> and
-                    paste the public key above. This enables full transaction sync (incoming + outgoing).
+                    Go to <span className="font-medium text-foreground">wise.com → Settings → API tokens → Manage public keys</span>,
+                    then upload the downloaded .pem file. This enables full transaction sync (incoming + outgoing).
                   </p>
                 </div>
                 <label className="flex items-center gap-2 cursor-pointer">
