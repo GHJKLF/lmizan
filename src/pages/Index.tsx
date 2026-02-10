@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { ViewState, Transaction } from '@/types';
 import { DataService } from '@/services/dataService';
+import { supabase } from '@/integrations/supabase/client';
 import AppSidebar from '@/components/AppSidebar';
 import Dashboard from '@/components/dashboard/Dashboard';
 import TransactionTable from '@/components/transactions/TransactionTable';
@@ -12,6 +14,7 @@ import PayoutReconciler from '@/components/modals/PayoutReconciler';
 import { Upload, Scale, ArrowLeftRight } from 'lucide-react';
 
 const Index: React.FC = () => {
+  const navigate = useNavigate();
   const [currentView, setCurrentView] = useState<ViewState>('DASHBOARD');
   const [selectedAccount, setSelectedAccount] = useState<string | 'ALL'>('ALL');
   const [transactions, setTransactions] = useState<Transaction[]>([]);
@@ -58,7 +61,7 @@ const Index: React.FC = () => {
         onSelectAccount={setSelectedAccount}
         accounts={accounts}
         onRenameAccount={handleRenameAccount}
-        onLogout={() => {}}
+        onLogout={async () => { await supabase.auth.signOut(); navigate('/login'); }}
         onOpenSettings={() => setSettingsOpen(true)}
       />
 
