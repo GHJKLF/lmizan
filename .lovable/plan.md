@@ -1,38 +1,47 @@
-# Fix 5 Bugs in balanceEngine.ts
 
-## Bug 1: classifyTier missing ASSET keywords
-The classifyTier function only checks for 'asset' keyword but is missing many other asset-type account names from the original implementation.
+# Fix 3 Remaining Bugs
 
-**Fix:** Change the ASSET check from just `n.includes('asset')` to:
-```
-if (n.includes('asset') || n.includes('home') || n.includes('car') || n.includes('renovation') || n.includes('inventory') || n.includes('stock') || n.includes('aquablade') || n.includes('madeco')) return 'ASSET';
-```
+## Bug 1: created_at tiebreaker for balance sorting
 
-## Bug 2: Binance misclassified as PROCESSOR
-Binance is currently classified as PROCESSOR but should be LIQUID_BANK per the original logic.
+When multiple transactions share the same date, the sort order is arbitrary. This causes incorrect balance snapshots -- the system may pick an older balance row instead of the latest correction. Adding `created_at` as a secondary sort key ensures the most recently inserted row wins.
 
-**Fix:** Remove `n.includes('binance')` from the PROCESSOR condition so it falls through to LIQUID_BANK.
+**Changes:**
 
-## Bug 3: Account grouping ignores currency
-computeAccountSummaries groups transactions by `tx.account` only, but the original groups by `${tx.account}-${tx.currency}` so each account-currency pair is treated separately.
+1. **src/types/index.ts** -- Add `createdAt?: string` to the `Transaction` interface (after `balanceReserved`).
 
-**Fix:** Change the grouping key from `tx.account` to `\${tx.account}-\${tx.currency}`.
+2. **src/services/dataService.ts** (line 92) -- Add `createdAt: row.created_at,` to the mapping object inside `fetchTransactions()`.
 
-## Bug 4: ASSET accounts should have available = 0
-In the original logic, ASSET tier accounts always have available forced to 0. The current code does not do this.
+3. **src/services/balanceEngine.ts** (line 57) -- Replace the simple date sort with a two-level sort:
+   - Primary: date descending
+   - Secondary: `createdAt` descending (later `created_at` wins for same-date transactions)
 
-**Fix:** After computing the available value for each account, add: `if (classifyTier(account) === 'ASSET') { available = 0; }`
+## Bug 2: Wrong account names in sidebar
 
-## Bug 5: totalLiquidCash uses total instead of available
-In computeLiquiditySnapshot, totalLiquidCash adds `s.total` (via eurTotal) but should use `s.available` to match the original.
+`fetchAccounts()` currently merges three sources (hardcoded ACCOUNTS constant, accounts DB table, localStorage), producing phantom accounts that have no transactions.
 
-**Fix:** Change `totalLiquidCash += eurTotal` to `totalLiquidCash += toEUR(s.available, s.currency)` for non-ASSET accounts.
+**Changes:**
 
-## Technical Summary
-| # | File | Lines | Change |
-|---|------|-------|--------|
-| 1 | src/services/balanceEngine.ts | 6-20 | Add missing ASSET keywords to classifyTier |
-| 2 | src/services/balanceEngine.ts | 6-20 | Remove binance from PROCESSOR tier |
-| 3 | src/services/balanceEngine.ts | 40-50 | Group by account-currency pair |
-| 4 | src/services/balanceEngine.ts | 60-80 | Force available=0 for ASSET tier |
-| 5 | src/services/balanceEngine.ts | 110-120 | Use s.available for totalLiquidCash |
+1. **src/services/dataService.ts** (lines 96-102) -- Replace the entire `fetchAccounts()` body with a single query: `SELECT DISTINCT account FROM transactions ORDER BY account`. This ensures only accounts that actually have transaction data appear in the sidebar.
+
+## Bug 3: Account detail shows single combined balance instead of per-currency breakdown
+
+Currently, `Dashboard.tsx` passes a single `summary` to `AccountDashboard`. But since summaries are now keyed by `account-currency` pair (e.g., `"Wise Grunkauf-EUR"`), `summaries.find(s => s.account === selectedAccount)` no longer matches because `s.account` is `"Wise Grunkauf-EUR"`.
+
+**Changes:**
+
+1. **src/services/balanceEngine.ts** (line 84) -- Store the original account name (without currency suffix) in the summary. Currently `account` is set from the map key which is `"AccountName-Currency"`. Change to store the original `latest.account` so `summary.account` remains the clean account name (e.g., `"Wise Grunkauf"`).
+
+2. **src/components/dashboard/Dashboard.tsx** (lines 39-48) -- Instead of passing a single `summary`, filter all summaries matching `selectedAccount` and pass the array. Change `AccountDashboard` props from `summary: AccountSummary | undefined` to `summaries: AccountSummary[]`.
+
+3. **src/components/dashboard/AccountDashboard.tsx** -- Update the component to:
+   - Accept `summaries: AccountSummary[]` instead of `summary: AccountSummary | undefined`
+   - Render one balance card group per currency (each showing Balance, Available, Reserved in its native currency)
+   - Display currency label (e.g., "EUR LIQUIDITY", "USD LIQUIDITY") as a header for each group
+
+## Technical Details
+
+| Bug | Files Modified | Key Change |
+|-----|---------------|------------|
+| 1 | types/index.ts, dataService.ts, balanceEngine.ts | Add createdAt field + secondary sort |
+| 2 | dataService.ts | Replace fetchAccounts with DISTINCT query on transactions |
+| 3 | balanceEngine.ts, Dashboard.tsx, AccountDashboard.tsx | Store clean account name in summaries, pass array of summaries, render per-currency cards |
