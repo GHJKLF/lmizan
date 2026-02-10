@@ -17,7 +17,6 @@ Deno.serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
-    // Read raw body for signature verification
     const bodyText = await req.text();
     let body: any;
     try {
@@ -66,39 +65,37 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Validate webhook signature with HMAC-SHA256
-    if (conn.webhook_secret) {
-      const signature = req.headers.get("x-signature-sha256");
-      if (!signature) {
-        return new Response(JSON.stringify({ error: "Missing signature" }), {
-          status: 401,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
+    // HMAC signature validation is MANDATORY
+    const signature = req.headers.get("x-signature-sha256");
+    if (!signature) {
+      return new Response(JSON.stringify({ error: "Missing signature" }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
 
-      const encoder = new TextEncoder();
-      const key = await crypto.subtle.importKey(
-        "raw",
-        encoder.encode(conn.webhook_secret),
-        { name: "HMAC", hash: "SHA-256" },
-        false,
-        ["sign"]
-      );
-      const signatureBytes = await crypto.subtle.sign(
-        "HMAC",
-        key,
-        encoder.encode(bodyText)
-      );
-      const computedSignature = Array.from(new Uint8Array(signatureBytes))
-        .map((b) => b.toString(16).padStart(2, "0"))
-        .join("");
+    const encoder = new TextEncoder();
+    const key = await crypto.subtle.importKey(
+      "raw",
+      encoder.encode(conn.webhook_secret),
+      { name: "HMAC", hash: "SHA-256" },
+      false,
+      ["sign"]
+    );
+    const signatureBytes = await crypto.subtle.sign(
+      "HMAC",
+      key,
+      encoder.encode(bodyText)
+    );
+    const computedSignature = Array.from(new Uint8Array(signatureBytes))
+      .map((b) => b.toString(16).padStart(2, "0"))
+      .join("");
 
-      if (computedSignature !== signature) {
-        return new Response(JSON.stringify({ error: "Invalid signature" }), {
-          status: 401,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
+    if (computedSignature !== signature) {
+      return new Response(JSON.stringify({ error: "Invalid signature" }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     // Build transaction
@@ -116,12 +113,13 @@ Deno.serve(async (req) => {
       date,
       amount,
       currency: data.currency || conn.currency,
-      description,
+      description: String(description).substring(0, 500),
       type: isCredit ? "Inflow" : "Outflow",
       account: conn.account_name,
       category: "Uncategorized",
       running_balance: data.post_transaction_balance_amount ?? null,
-      notes: data.transfer_reference ? `Ref: ${data.transfer_reference}` : null,
+      notes: data.transfer_reference ? `Ref: ${String(data.transfer_reference).substring(0, 500)}` : null,
+      user_id: conn.user_id,
     };
 
     const { error: insertErr } = await supabase

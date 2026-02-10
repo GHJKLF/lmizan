@@ -133,6 +133,7 @@ Deno.serve(async (req) => {
         category: "Uncategorized",
         notes: wt.referenceNumber ? `Ref: ${wt.referenceNumber}` : null,
         running_balance: wt.runningBalance?.value ?? null,
+        user_id: conn.user_id,
         _fingerprint: `${date}-${amount}-${description.trim().toLowerCase()}-${currency}`,
       };
     });
