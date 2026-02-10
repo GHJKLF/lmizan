@@ -1,5 +1,4 @@
 import { Transaction, Currency, TransactionType } from '@/types';
-import { ACCOUNTS } from '@/constants';
 import { supabase } from '@/integrations/supabase/client';
 
 const LS_TX_KEY = 'imizan_transactions';
@@ -169,72 +168,39 @@ export const DataService = {
   },
 
   async updateTransaction(tx: Transaction): Promise<boolean> {
-    const userId = await isAuthenticated();
-    if (userId) {
-      const payload: any = {
-        date: tx.date,
-        description: tx.description,
-        category: tx.category,
-        amount: tx.amount,
-        currency: tx.currency,
-        account: tx.account,
-        type: tx.type,
-        notes: tx.notes,
-        running_balance: tx.runningBalance,
-        balance_available: tx.balanceAvailable,
-        balance_reserved: tx.balanceReserved,
-      };
-      const { error } = await supabase.from('transactions').update(payload).eq('id', tx.id);
-      return !error;
-    } else {
-      const existing = await this.fetchTransactions();
-      const updated = existing.map((t) => (t.id === tx.id ? tx : t));
-      localStorage.setItem(LS_TX_KEY, JSON.stringify(updated));
-      return true;
-    }
+    const payload: any = {
+      date: tx.date,
+      description: tx.description,
+      category: tx.category,
+      amount: tx.amount,
+      currency: tx.currency,
+      account: tx.account,
+      type: tx.type,
+      notes: tx.notes,
+      running_balance: tx.runningBalance,
+      balance_available: tx.balanceAvailable,
+      balance_reserved: tx.balanceReserved,
+    };
+    const { error } = await supabase.from('transactions').update(payload).eq('id', tx.id);
+    return !error;
   },
 
   async deleteTransaction(id: string): Promise<boolean> {
-    const userId = await isAuthenticated();
-    if (userId) {
-      const { error } = await supabase.from('transactions').delete().eq('id', id);
-      return !error;
-    } else {
-      const existing = await this.fetchTransactions();
-      const updated = existing.filter((t) => t.id !== id);
-      localStorage.setItem(LS_TX_KEY, JSON.stringify(updated));
-      return true;
-    }
+    const { error } = await supabase.from('transactions').delete().eq('id', id);
+    return !error;
   },
 
   async deleteTransactions(ids: string[]): Promise<boolean> {
-    const userId = await isAuthenticated();
-    if (userId) {
-      const { error } = await supabase.from('transactions').delete().in('id', ids);
-      return !error;
-    } else {
-      const existing = await this.fetchTransactions();
-      const updated = existing.filter((t) => !ids.includes(t.id));
-      localStorage.setItem(LS_TX_KEY, JSON.stringify(updated));
-      return true;
-    }
+    const { error } = await supabase.from('transactions').delete().in('id', ids);
+    return !error;
   },
 
   async renameAccount(oldName: string, newName: string): Promise<boolean> {
-    const userId = await isAuthenticated();
-    if (userId) {
-      const { error } = await supabase
-        .from('transactions')
-        .update({ account: newName })
-        .eq('account', oldName);
-      if (error) return false;
-    } else {
-      const existing = await this.fetchTransactions();
-      const updated = existing.map((t) =>
-        t.account === oldName ? { ...t, account: newName } : t
-      );
-      localStorage.setItem(LS_TX_KEY, JSON.stringify(updated));
-    }
+    const { error } = await supabase
+      .from('transactions')
+      .update({ account: newName })
+      .eq('account', oldName);
+    if (error) return false;
 
     const accounts = await this.fetchAccounts();
     if (!accounts.includes(newName)) {
@@ -252,11 +218,7 @@ export const DataService = {
   },
 
   async fixLiquidityData(): Promise<void> {
-    const userId = await isAuthenticated();
-    if (!userId) {
-      const txs = await this.fetchTransactions();
-      localStorage.setItem(LS_TX_KEY, JSON.stringify(txs));
-    }
+    // No-op when authenticated — data is always in DB
   },
 
   async reconcilePayouts(
