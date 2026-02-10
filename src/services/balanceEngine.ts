@@ -5,15 +5,14 @@ const TIER_MAP: Record<string, AccountSummary['tier']> = {};
 
 const classifyTier = (account: string): AccountSummary['tier'] => {
   const n = account.toLowerCase();
-  if (n.includes('asset')) return 'ASSET';
+  if (n.includes('asset') || n.includes('home') || n.includes('car') || n.includes('renovation') || n.includes('inventory') || n.includes('stock') || n.includes('aquablade') || n.includes('madeco')) return 'ASSET';
   if (
     n.includes('stripe') ||
     n.includes('paypal') ||
     n.includes('payoneer') ||
     n.includes('woo') ||
     n.includes('airwallex') ||
-    n.includes('worldfirst') ||
-    n.includes('binance')
+    n.includes('worldfirst')
   )
     return 'PROCESSOR';
   return 'LIQUID_BANK';
@@ -46,7 +45,7 @@ export const computeAccountSummaries = (transactions: Transaction[]): AccountSum
   const accountMap = new Map<string, Transaction[]>();
 
   transactions.forEach((tx) => {
-    const key = tx.account;
+    const key = `${tx.account}-${tx.currency}`;
     if (!accountMap.has(key)) accountMap.set(key, []);
     accountMap.get(key)!.push(tx);
   });
@@ -75,6 +74,10 @@ export const computeAccountSummaries = (transactions: Transaction[]): AccountSum
         else total -= tx.amount;
       });
       available = total;
+    }
+
+    if (classifyTier(account) === 'ASSET') {
+      available = 0;
     }
 
     summaries.push({
@@ -113,7 +116,7 @@ export const computeLiquiditySnapshot = (summaries: AccountSummary[]): Liquidity
     if (s.tier === 'ASSET') {
       fixedAssets += eurTotal;
     } else {
-      totalLiquidCash += eurTotal;
+      totalLiquidCash += toEUR(s.available, s.currency);
       totalReserved += eurReserved;
       liquidAssets += eurTotal;
     }
