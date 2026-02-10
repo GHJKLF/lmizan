@@ -37,11 +37,11 @@ const Dashboard: React.FC<Props> = ({ transactions, selectedAccount, onSelectAcc
   }
 
   if (selectedAccount !== 'ALL') {
-    const summary = summaries.find((s) => s.account === selectedAccount);
+    const accountSummaries = summaries.filter((s) => s.account === selectedAccount);
     return (
       <AccountDashboard
         account={selectedAccount}
-        summary={summary}
+        summaries={accountSummaries}
         transactions={transactions}
         onBack={() => onSelectAccount('ALL')}
       />

@@ -9,11 +9,11 @@ import {
   formatAmount,
   toEUR,
 } from '@/services/balanceEngine';
-import { ArrowLeft, TrendingUp, TrendingDown, Wallet } from 'lucide-react';
+import { ArrowLeft, TrendingUp, TrendingDown } from 'lucide-react';
 
 interface Props {
   account: string;
-  summary: AccountSummary | undefined;
+  summaries: AccountSummary[];
   transactions: Transaction[];
   onBack: () => void;
 }
@@ -29,7 +29,7 @@ const PIE_COLORS = [
   'hsl(50 60% 50%)',
 ];
 
-const AccountDashboard: React.FC<Props> = ({ account, summary, transactions, onBack }) => {
+const AccountDashboard: React.FC<Props> = ({ account, summaries, transactions, onBack }) => {
   const accountTxs = useMemo(() => transactions.filter((t) => t.account === account), [transactions, account]);
   const monthlyFlows = useMemo(() => computeMonthlyFlows(transactions, account), [transactions, account]);
   const categoryBreakdown = useMemo(() => computeCategoryBreakdown(transactions, account), [transactions, account]);
@@ -41,7 +41,6 @@ const AccountDashboard: React.FC<Props> = ({ account, summary, transactions, onB
 
   return (
     <div className="space-y-4">
-      {/* Back button */}
       <button
         onClick={onBack}
         className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
@@ -52,40 +51,48 @@ const AccountDashboard: React.FC<Props> = ({ account, summary, transactions, onB
 
       <h2 className="text-xl font-bold text-foreground">{account}</h2>
 
-      {/* Balance cards */}
-      {summary && (
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-          <Card className="border-border/60">
-            <CardContent className="p-4">
-              <p className="text-xs font-semibold text-muted-foreground uppercase">Balance</p>
-              <p className="text-xl font-bold text-foreground mt-1">
-                {formatAmount(summary.total, summary.currency)}
+      {/* Per-currency balance cards */}
+      {summaries.length > 0 && (
+        <div className="space-y-3">
+          {summaries.map((summary) => (
+            <div key={`${summary.account}-${summary.currency}`}>
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
+                {summary.currency} Liquidity
               </p>
-              <p className="text-xs text-muted-foreground">≈ {formatEUR(toEUR(summary.total, summary.currency))}</p>
-            </CardContent>
-          </Card>
-          <Card className="border-border/60">
-            <CardContent className="p-4">
-              <p className="text-xs font-semibold text-muted-foreground uppercase">Available</p>
-              <p className="text-xl font-bold text-foreground mt-1">
-                {formatAmount(summary.available, summary.currency)}
-              </p>
-            </CardContent>
-          </Card>
-          <Card className="border-border/60">
-            <CardContent className="p-4">
-              <p className="text-xs font-semibold text-muted-foreground uppercase">Reserved</p>
-              <p className="text-xl font-bold text-foreground mt-1">
-                {formatAmount(summary.reserved, summary.currency)}
-              </p>
-            </CardContent>
-          </Card>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <Card className="border-border/60">
+                  <CardContent className="p-4">
+                    <p className="text-xs font-semibold text-muted-foreground uppercase">Balance</p>
+                    <p className="text-xl font-bold text-foreground mt-1">
+                      {formatAmount(summary.total, summary.currency)}
+                    </p>
+                    <p className="text-xs text-muted-foreground">≈ {formatEUR(toEUR(summary.total, summary.currency))}</p>
+                  </CardContent>
+                </Card>
+                <Card className="border-border/60">
+                  <CardContent className="p-4">
+                    <p className="text-xs font-semibold text-muted-foreground uppercase">Available</p>
+                    <p className="text-xl font-bold text-foreground mt-1">
+                      {formatAmount(summary.available, summary.currency)}
+                    </p>
+                  </CardContent>
+                </Card>
+                <Card className="border-border/60">
+                  <CardContent className="p-4">
+                    <p className="text-xs font-semibold text-muted-foreground uppercase">Reserved</p>
+                    <p className="text-xl font-bold text-foreground mt-1">
+                      {formatAmount(summary.reserved, summary.currency)}
+                    </p>
+                  </CardContent>
+                </Card>
+              </div>
+            </div>
+          ))}
         </div>
       )}
 
       {/* Charts row */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        {/* Category Pie */}
         <Card className="border-border/60">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
@@ -133,7 +140,6 @@ const AccountDashboard: React.FC<Props> = ({ account, summary, transactions, onB
           </CardContent>
         </Card>
 
-        {/* Monthly Trend */}
         <Card className="border-border/60">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">

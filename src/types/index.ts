@@ -28,6 +28,7 @@ export interface Transaction {
   runningBalance?: number;
   balanceAvailable?: number;
   balanceReserved?: number;
+  createdAt?: string;
 }
 
 export interface AccountSummary {
