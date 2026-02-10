@@ -80,6 +80,48 @@ export type Database = {
         }
         Relationships: []
       }
+      wise_connections: {
+        Row: {
+          account_name: string
+          api_token: string
+          balance_id: string
+          created_at: string
+          currency: string
+          id: string
+          last_synced_at: string | null
+          profile_id: string
+          updated_at: string
+          user_id: string
+          webhook_secret: string | null
+        }
+        Insert: {
+          account_name: string
+          api_token: string
+          balance_id: string
+          created_at?: string
+          currency?: string
+          id?: string
+          last_synced_at?: string | null
+          profile_id: string
+          updated_at?: string
+          user_id: string
+          webhook_secret?: string | null
+        }
+        Update: {
+          account_name?: string
+          api_token?: string
+          balance_id?: string
+          created_at?: string
+          currency?: string
+          id?: string
+          last_synced_at?: string | null
+          profile_id?: string
+          updated_at?: string
+          user_id?: string
+          webhook_secret?: string | null
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
