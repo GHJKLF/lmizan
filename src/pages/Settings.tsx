@@ -47,12 +47,12 @@ const Settings: React.FC = () => {
       const [accs, { data: conns }] = await Promise.all([
         DataService.fetchAccounts(),
         supabase
-          .from('wise_connections')
+          .from('wise_connections_safe' as any)
           .select('id, account_name, profile_id, balance_id, currency, last_synced_at, created_at')
           .order('created_at', { ascending: false }),
       ]);
       setAccounts(accs);
-      setConnections((conns as WiseConnection[]) || []);
+      setConnections((conns as unknown as WiseConnection[]) || []);
     } catch (e) {
       console.error(e);
     } finally {
@@ -123,23 +123,7 @@ const Settings: React.FC = () => {
   const handleTest = async (id: string) => {
     setTestingId(id);
     try {
-      const conn = connections.find(c => c.id === id);
-      if (!conn) return;
-
-      // We need the api_token — fetch it from the edge function or directly
-      // For test, call Wise profiles endpoint via a lightweight edge call
-      const { data: fullConn } = await supabase
-        .from('wise_connections')
-        .select('api_token')
-        .eq('id', id)
-        .single();
-
-      if (!fullConn?.api_token) {
-        toast.error('Could not retrieve API token');
-        return;
-      }
-
-      // We can't call Wise directly from the browser (CORS), so we'll just try a sync with 1 day
+      // Test by doing a 1-day sync via edge function (no need to read api_token client-side)
       const res = await supabase.functions.invoke('wise-sync', {
         body: { wise_connection_id: id, days_back: 1 },
       });

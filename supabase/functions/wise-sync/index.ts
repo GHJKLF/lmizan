@@ -20,21 +20,26 @@ Deno.serve(async (req) => {
       });
     }
 
-    const supabase = createClient(
+    // User-scoped client for auth verification and data operations
+    const supabaseUser = createClient(
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_ANON_KEY")!,
       { global: { headers: { Authorization: authHeader } } }
     );
 
-    const { data: claims, error: claimsErr } = await supabase.auth.getClaims(
-      authHeader.replace("Bearer ", "")
-    );
-    if (claimsErr || !claims?.claims) {
+    const { data: { user }, error: userErr } = await supabaseUser.auth.getUser();
+    if (userErr || !user) {
       return new Response(JSON.stringify({ error: "Unauthorized" }), {
         status: 401,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
+
+    // Service role client for reading sensitive connection data
+    const supabaseAdmin = createClient(
+      Deno.env.get("SUPABASE_URL")!,
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
+    );
 
     const { wise_connection_id, days_back } = await req.json();
     if (!wise_connection_id) {
@@ -44,11 +49,9 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Fetch the connection
-    const { data: conn, error: connErr } = await supabase
-      .from("wise_connections")
-      .select("*")
-      .eq("id", wise_connection_id)
+    // Fetch the connection using service role (includes api_token)
+    const { data: conn, error: connErr } = await supabaseAdmin
+      .rpc("get_wise_connection_with_token", { p_connection_id: wise_connection_id })
       .single();
 
     if (connErr || !conn) {
@@ -87,7 +90,7 @@ Deno.serve(async (req) => {
 
     if (transactions.length === 0) {
       // Update last_synced_at even if no new txs
-      await supabase
+      await supabaseAdmin
         .from("wise_connections")
         .update({ last_synced_at: new Date().toISOString() })
         .eq("id", wise_connection_id);
@@ -99,7 +102,7 @@ Deno.serve(async (req) => {
     }
 
     // Fetch existing transactions for dedup
-    const { data: existingTxs } = await supabase
+    const { data: existingTxs } = await supabaseAdmin
       .from("transactions")
       .select("date, amount, description, currency")
       .eq("account", conn.account_name);
@@ -147,7 +150,7 @@ Deno.serve(async (req) => {
       const CHUNK = 500;
       for (let i = 0; i < payloads.length; i += CHUNK) {
         const chunk = payloads.slice(i, i + CHUNK);
-        const { error: insertErr } = await supabase
+        const { error: insertErr } = await supabaseAdmin
           .from("transactions")
           .insert(chunk);
         if (!insertErr) inserted += chunk.length;
@@ -156,7 +159,7 @@ Deno.serve(async (req) => {
     }
 
     // Update last_synced_at
-    await supabase
+    await supabaseAdmin
       .from("wise_connections")
       .update({ last_synced_at: new Date().toISOString() })
       .eq("id", wise_connection_id);

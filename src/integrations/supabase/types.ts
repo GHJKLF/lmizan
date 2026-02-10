@@ -124,10 +124,58 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      wise_connections_safe: {
+        Row: {
+          account_name: string | null
+          balance_id: string | null
+          created_at: string | null
+          currency: string | null
+          id: string | null
+          last_synced_at: string | null
+          profile_id: string | null
+          updated_at: string | null
+          user_id: string | null
+        }
+        Insert: {
+          account_name?: string | null
+          balance_id?: string | null
+          created_at?: string | null
+          currency?: string | null
+          id?: string | null
+          last_synced_at?: string | null
+          profile_id?: string | null
+          updated_at?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          account_name?: string | null
+          balance_id?: string | null
+          created_at?: string | null
+          currency?: string | null
+          id?: string | null
+          last_synced_at?: string | null
+          profile_id?: string | null
+          updated_at?: string | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
-      [_ in never]: never
+      get_wise_connection_with_token: {
+        Args: { p_connection_id: string }
+        Returns: {
+          account_name: string
+          api_token: string
+          balance_id: string
+          currency: string
+          id: string
+          last_synced_at: string
+          profile_id: string
+          user_id: string
+          webhook_secret: string
+        }[]
+      }
     }
     Enums: {
       [_ in never]: never
