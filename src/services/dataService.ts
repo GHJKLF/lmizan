@@ -135,47 +135,37 @@ export const DataService = {
       amount: Math.abs(Number(t.amount) || 0),
     }));
 
-    const userId = await isAuthenticated();
-    if (userId) {
-      const CHUNK_SIZE = 1000;
-      let addedCount = 0;
+    const CHUNK_SIZE = 1000;
+    let addedCount = 0;
 
-      for (let i = 0; i < normalizedUniqueTxs.length; i += CHUNK_SIZE) {
-        const chunk = normalizedUniqueTxs.slice(i, i + CHUNK_SIZE);
-        const dbPayloads = chunk.map((tx) => {
-          const payload: any = {
-            id: tx.id,
-            date: tx.date,
-            description: tx.description,
-            category: tx.category,
-            amount: tx.amount,
-            currency: tx.currency,
-            account: tx.account,
-            type: tx.type,
-            notes: tx.notes || null,
-            user_id: userId,
-          };
-          if (tx.runningBalance !== undefined) payload.running_balance = tx.runningBalance;
-          if (tx.balanceAvailable !== undefined) payload.balance_available = tx.balanceAvailable;
-          if (tx.balanceReserved !== undefined) payload.balance_reserved = tx.balanceReserved;
-          return payload;
-        });
+    for (let i = 0; i < normalizedUniqueTxs.length; i += CHUNK_SIZE) {
+      const chunk = normalizedUniqueTxs.slice(i, i + CHUNK_SIZE);
+      const dbPayloads = chunk.map((tx) => {
+        const payload: any = {
+          id: tx.id,
+          date: tx.date,
+          description: tx.description,
+          category: tx.category,
+          amount: tx.amount,
+          currency: tx.currency,
+          account: tx.account,
+          type: tx.type,
+          notes: tx.notes || null,
+        };
+        if (tx.runningBalance !== undefined) payload.running_balance = tx.runningBalance;
+        if (tx.balanceAvailable !== undefined) payload.balance_available = tx.balanceAvailable;
+        if (tx.balanceReserved !== undefined) payload.balance_reserved = tx.balanceReserved;
+        return payload;
+      });
 
-        const { error } = await supabase.from('transactions').insert(dbPayloads);
-        if (error) {
-          console.error('Bulk insert failed for chunk:', error);
-        } else {
-          addedCount += chunk.length;
-        }
+      const { error } = await supabase.from('transactions').insert(dbPayloads);
+      if (error) {
+        console.error('Bulk insert failed for chunk:', error);
+      } else {
+        addedCount += chunk.length;
       }
-      return { added: addedCount, skipped };
-    } else {
-      const saved = localStorage.getItem(LS_TX_KEY);
-      const current = saved ? JSON.parse(saved) : [];
-      const updated = [...normalizedUniqueTxs, ...current];
-      localStorage.setItem(LS_TX_KEY, JSON.stringify(updated));
-      return { added: normalizedUniqueTxs.length, skipped };
     }
+    return { added: addedCount, skipped };
   },
 
   async updateTransaction(tx: Transaction): Promise<boolean> {
