@@ -35,6 +35,7 @@ const TransactionTable: React.FC<Props> = ({ transactions, selectedAccount, onRe
   const [search, setSearch] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('');
   const [typeFilter, setTypeFilter] = useState('');
+  const [currencyFilter, setCurrencyFilter] = useState('');
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
 
@@ -84,6 +85,7 @@ const TransactionTable: React.FC<Props> = ({ transactions, selectedAccount, onRe
     }
     if (categoryFilter) result = result.filter((t) => t.category === categoryFilter);
     if (typeFilter) result = result.filter((t) => t.type === typeFilter);
+    if (currencyFilter) result = result.filter((t) => t.currency.toUpperCase() === currencyFilter);
     if (dateFrom) result = result.filter((t) => t.date >= dateFrom);
     if (dateTo) result = result.filter((t) => t.date <= dateTo);
 
@@ -97,7 +99,7 @@ const TransactionTable: React.FC<Props> = ({ transactions, selectedAccount, onRe
     });
 
     return result;
-  }, [transactions, selectedAccount, search, categoryFilter, typeFilter, dateFrom, dateTo, sortField, sortDir]);
+  }, [transactions, selectedAccount, search, categoryFilter, typeFilter, currencyFilter, dateFrom, dateTo, sortField, sortDir]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const paged = filtered.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
@@ -263,12 +265,16 @@ const TransactionTable: React.FC<Props> = ({ transactions, selectedAccount, onRe
               <option value="Inflow">Inflow</option>
               <option value="Outflow">Outflow</option>
             </select>
+            <select value={currencyFilter} onChange={(e) => { setCurrencyFilter(e.target.value); setPage(0); }} className={selectClass}>
+              <option value="">All Currencies</option>
+              {Object.values(Currency).map((c) => <option key={c} value={c}>{c}</option>)}
+            </select>
             <input type="date" value={dateFrom} onChange={(e) => { setDateFrom(e.target.value); setPage(0); }} className={inputClass} />
             <span className="text-xs text-muted-foreground">to</span>
             <input type="date" value={dateTo} onChange={(e) => { setDateTo(e.target.value); setPage(0); }} className={inputClass} />
-            {(search || categoryFilter || typeFilter || dateFrom || dateTo) && (
+            {(search || categoryFilter || typeFilter || currencyFilter || dateFrom || dateTo) && (
               <button
-                onClick={() => { setSearch(''); setCategoryFilter(''); setTypeFilter(''); setDateFrom(''); setDateTo(''); setPage(0); }}
+                onClick={() => { setSearch(''); setCategoryFilter(''); setTypeFilter(''); setCurrencyFilter(''); setDateFrom(''); setDateTo(''); setPage(0); }}
                 className="text-xs text-muted-foreground hover:text-foreground underline"
               >
                 Clear
