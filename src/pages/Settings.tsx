@@ -82,7 +82,8 @@ const Settings: React.FC = () => {
         profile_id: form.profile_id,
         balance_id: form.balance_id,
         currency: form.currency,
-      });
+        webhook_secret: crypto.randomUUID().replace(/-/g, '') + crypto.randomUUID().replace(/-/g, ''),
+      } as any);
       if (error) throw error;
       toast.success('Wise connection added');
       setShowForm(false);

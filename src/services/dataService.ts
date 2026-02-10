@@ -116,6 +116,9 @@ export const DataService = {
   async addTransactionsBulk(txs: Transaction[]): Promise<{ added: number; skipped: number }> {
     if (txs.length === 0) return { added: 0, skipped: 0 };
 
+    const userId = await isAuthenticated();
+    if (!userId) return { added: 0, skipped: txs.length };
+
     const existing = await this.fetchTransactions();
     const existingHashes = new Set(existing.map(generateFingerprint));
     const existingIds = new Set(existing.map((t) => t.id));
@@ -150,6 +153,7 @@ export const DataService = {
           account: tx.account,
           type: tx.type,
           notes: tx.notes || null,
+          user_id: userId,
         };
         if (tx.runningBalance !== undefined) payload.running_balance = tx.runningBalance;
         if (tx.balanceAvailable !== undefined) payload.balance_available = tx.balanceAvailable;

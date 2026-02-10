@@ -50,6 +50,7 @@ export type Database = {
           notes: string | null
           running_balance: number | null
           type: string | null
+          user_id: string
         }
         Insert: {
           account?: string | null
@@ -65,6 +66,7 @@ export type Database = {
           notes?: string | null
           running_balance?: number | null
           type?: string | null
+          user_id: string
         }
         Update: {
           account?: string | null
@@ -80,6 +82,7 @@ export type Database = {
           notes?: string | null
           running_balance?: number | null
           type?: string | null
+          user_id?: string
         }
         Relationships: []
       }
@@ -95,7 +98,7 @@ export type Database = {
           profile_id: string
           updated_at: string
           user_id: string
-          webhook_secret: string | null
+          webhook_secret: string
         }
         Insert: {
           account_name: string
@@ -108,7 +111,7 @@ export type Database = {
           profile_id: string
           updated_at?: string
           user_id: string
-          webhook_secret?: string | null
+          webhook_secret: string
         }
         Update: {
           account_name?: string
@@ -121,7 +124,7 @@ export type Database = {
           profile_id?: string
           updated_at?: string
           user_id?: string
-          webhook_secret?: string | null
+          webhook_secret?: string
         }
         Relationships: []
       }
