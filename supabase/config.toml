@@ -8,3 +8,9 @@ verify_jwt = false
 
 [functions.ai-import]
 verify_jwt = false
+
+[functions.wise-sync]
+verify_jwt = false
+
+[functions.wise-webhook]
+verify_jwt = false

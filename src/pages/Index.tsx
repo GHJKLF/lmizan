@@ -11,7 +11,8 @@ import ImportModal from '@/components/ai/ImportModal';
 import UpdateBalanceModal from '@/components/modals/UpdateBalanceModal';
 import SettingsModal from '@/components/modals/SettingsModal';
 import PayoutReconciler from '@/components/modals/PayoutReconciler';
-import { Upload, Scale, ArrowLeftRight } from 'lucide-react';
+import { Upload, Scale, ArrowLeftRight, RefreshCw, Loader2 } from 'lucide-react';
+import { toast } from 'sonner';
 
 const Index: React.FC = () => {
   const navigate = useNavigate();
@@ -26,6 +27,33 @@ const Index: React.FC = () => {
   const [balanceOpen, setBalanceOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [reconcilerOpen, setReconcilerOpen] = useState(false);
+  const [wisesyncing, setWisesyncing] = useState(false);
+
+  const handleSyncAllWise = async () => {
+    setWisesyncing(true);
+    try {
+      const { data: conns } = await supabase
+        .from('wise_connections')
+        .select('id, account_name');
+      if (!conns || conns.length === 0) {
+        toast.info('No Wise connections configured. Go to Settings to add one.');
+        return;
+      }
+      let totalInserted = 0;
+      for (const conn of conns) {
+        const res = await supabase.functions.invoke('wise-sync', {
+          body: { wise_connection_id: conn.id, days_back: 90 },
+        });
+        if (!res.error && res.data) totalInserted += res.data.inserted || 0;
+      }
+      toast.success(`Wise sync complete: ${totalInserted} new transactions`);
+      await loadData();
+    } catch (err: any) {
+      toast.error(err.message || 'Wise sync failed');
+    } finally {
+      setWisesyncing(false);
+    }
+  };
 
   const loadData = useCallback(async () => {
     setTxLoading(true);
@@ -62,12 +90,20 @@ const Index: React.FC = () => {
         accounts={accounts}
         onRenameAccount={handleRenameAccount}
         onLogout={async () => { await supabase.auth.signOut(); navigate('/login'); }}
-        onOpenSettings={() => setSettingsOpen(true)}
+        onOpenSettings={() => navigate('/settings')}
       />
 
       <main className="flex-1 ml-72 p-6 overflow-auto">
         {/* Action bar */}
         <div className="flex justify-end gap-2 mb-4">
+          <button
+            onClick={handleSyncAllWise}
+            disabled={wisesyncing}
+            className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-foreground border border-border hover:bg-accent rounded-lg transition-colors disabled:opacity-50"
+          >
+            {wisesyncing ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
+            Sync Wise
+          </button>
           <button
             onClick={() => setReconcilerOpen(true)}
             className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-foreground border border-border hover:bg-accent rounded-lg transition-colors"
