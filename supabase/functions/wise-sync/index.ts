@@ -6,6 +6,37 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
+async function fetchAllTransfers(
+  profileId: string,
+  token: string,
+  intervalStart: string,
+  intervalEnd: string
+): Promise<any[]> {
+  const all: any[] = [];
+  const limit = 50;
+  const maxPages = 4;
+
+  for (let page = 0; page < maxPages; page++) {
+    const offset = page * limit;
+    const url = `https://api.transferwise.com/v1/transfers?profile=${profileId}&limit=${limit}&offset=${offset}&createdDateStart=${encodeURIComponent(intervalStart)}&createdDateEnd=${encodeURIComponent(intervalEnd)}`;
+    const res = await fetch(url, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+
+    if (!res.ok) {
+      const errText = await res.text();
+      throw new Error(`Wise API error [${res.status}]: ${errText}`);
+    }
+
+    const data = await res.json();
+    if (!Array.isArray(data) || data.length === 0) break;
+    all.push(...data);
+    if (data.length < limit) break;
+  }
+
+  return all;
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -20,7 +51,6 @@ Deno.serve(async (req) => {
       });
     }
 
-    // User-scoped client for auth verification and data operations
     const supabaseUser = createClient(
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_ANON_KEY")!,
@@ -35,13 +65,12 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Service role client for reading sensitive connection data
     const supabaseAdmin = createClient(
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
-    const { wise_connection_id, days_back } = await req.json();
+    const { wise_connection_id } = await req.json();
     if (!wise_connection_id) {
       return new Response(
         JSON.stringify({ error: "wise_connection_id is required" }),
@@ -49,7 +78,6 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Fetch the connection using service role (includes api_token)
     const { data: conn, error: connErr } = await supabaseAdmin
       .rpc("get_wise_connection_with_token", { p_connection_id: wise_connection_id })
       .single();
@@ -61,35 +89,20 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Date range
+    // Date range: use last_synced_at or default to 12 months ago
     const intervalEnd = new Date().toISOString();
-    const daysBack = days_back || 90;
-    const intervalStart = new Date(
-      Date.now() - daysBack * 24 * 60 * 60 * 1000
-    ).toISOString();
+    const intervalStart = conn.last_synced_at
+      ? new Date(conn.last_synced_at).toISOString()
+      : new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString();
 
-    // Call Wise Balance Statement API
-    const wiseUrl = `https://api.transferwise.com/v1/profiles/${conn.profile_id}/balance-statements/${conn.balance_id}/statement.json?intervalStart=${intervalStart}&intervalEnd=${intervalEnd}&type=FLAT`;
+    const transfers = await fetchAllTransfers(
+      conn.profile_id,
+      conn.api_token,
+      intervalStart,
+      intervalEnd
+    );
 
-    const wiseRes = await fetch(wiseUrl, {
-      headers: { Authorization: `Bearer ${conn.api_token}` },
-    });
-
-    if (!wiseRes.ok) {
-      const errText = await wiseRes.text();
-      return new Response(
-        JSON.stringify({
-          error: `Wise API error [${wiseRes.status}]: ${errText}`,
-        }),
-        { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    const wiseData = await wiseRes.json();
-    const transactions = wiseData.transactions || [];
-
-    if (transactions.length === 0) {
-      // Update last_synced_at even if no new txs
+    if (transfers.length === 0) {
       await supabaseAdmin
         .from("wise_connections")
         .update({ last_synced_at: new Date().toISOString() })
@@ -101,53 +114,51 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Fetch existing transactions for dedup
+    // Fetch existing fingerprints for dedup (using transfer.id stored in notes or description)
     const { data: existingTxs } = await supabaseAdmin
       .from("transactions")
-      .select("date, amount, description, currency")
-      .eq("account", conn.account_name);
+      .select("notes")
+      .eq("account", conn.account_name)
+      .eq("user_id", conn.user_id);
 
-    const existingFingerprints = new Set(
-      (existingTxs || []).map(
-        (t: any) =>
-          `${t.date}-${t.amount}-${(t.description || "").trim().toLowerCase()}-${t.currency}`
-      )
+    const existingIds = new Set(
+      (existingTxs || [])
+        .map((t: any) => {
+          const match = (t.notes || "").match(/^wise_transfer_id:(\d+)/);
+          return match ? match[1] : null;
+        })
+        .filter(Boolean)
     );
 
-    // Map Wise transactions to our model
-    const mapped = transactions.map((wt: any) => {
-      const isDebit = wt.type === "DEBIT";
-      const amount = Math.abs(wt.amount?.value || 0);
-      const date = (wt.date || "").split("T")[0];
-      const description = wt.details?.description || wt.details?.type || "Wise Transaction";
-      const currency = wt.amount?.currency || conn.currency;
+    const mapped = transfers.map((tr: any) => {
+      const amount = Math.abs(tr.sourceValue || 0);
+      const date = (tr.created || "").split("T")[0];
+      const recipientName = tr.targetAccount?.name?.fullName || tr.targetAccount?.name || "";
+      const reference = tr.details?.reference || "";
+      const descParts = [recipientName, reference].filter(Boolean);
+      const description = descParts.length > 0 ? descParts.join(" – ") : "Wise Transfer";
 
       return {
         id: crypto.randomUUID(),
         date,
         amount,
-        currency,
+        currency: tr.sourceCurrency || conn.currency,
         description,
-        type: isDebit ? "Outflow" : "Inflow",
+        type: "Outflow",
         account: conn.account_name,
         category: "Uncategorized",
-        notes: wt.referenceNumber ? `Ref: ${wt.referenceNumber}` : null,
-        running_balance: wt.runningBalance?.value ?? null,
+        notes: `wise_transfer_id:${tr.id}`,
+        running_balance: null,
         user_id: conn.user_id,
-        _fingerprint: `${date}-${amount}-${description.trim().toLowerCase()}-${currency}`,
+        _wise_id: String(tr.id),
       };
     });
 
-    // Deduplicate
-    const newTxs = mapped.filter(
-      (t: any) => !existingFingerprints.has(t._fingerprint)
-    );
+    const newTxs = mapped.filter((t: any) => !existingIds.has(t._wise_id));
 
     let inserted = 0;
     if (newTxs.length > 0) {
-      // Remove _fingerprint before inserting
-      const payloads = newTxs.map(({ _fingerprint, ...rest }: any) => rest);
-
+      const payloads = newTxs.map(({ _wise_id, ...rest }: any) => rest);
       const CHUNK = 500;
       for (let i = 0; i < payloads.length; i += CHUNK) {
         const chunk = payloads.slice(i, i + CHUNK);
@@ -159,14 +170,13 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Update last_synced_at
     await supabaseAdmin
       .from("wise_connections")
       .update({ last_synced_at: new Date().toISOString() })
       .eq("id", wise_connection_id);
 
     return new Response(
-      JSON.stringify({ inserted, total: transactions.length }),
+      JSON.stringify({ inserted, total: transfers.length }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (err) {
