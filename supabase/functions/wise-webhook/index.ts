@@ -17,10 +17,20 @@ Deno.serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
-    const body = await req.json();
+    // Read raw body for signature verification
+    const bodyText = await req.text();
+    let body: any;
+    try {
+      body = JSON.parse(bodyText);
+    } catch {
+      return new Response(JSON.stringify({ error: "Invalid JSON" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     const eventType = body.event_type || body.event;
 
-    // Only process balance events
     if (
       eventType !== "balances#update" &&
       eventType !== "balances#credit"
@@ -41,7 +51,6 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Look up connection by balance_id
     const { data: conn, error: connErr } = await supabase
       .from("wise_connections")
       .select("*")
@@ -57,7 +66,7 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Validate webhook signature if secret is configured
+    // Validate webhook signature with HMAC-SHA256
     if (conn.webhook_secret) {
       const signature = req.headers.get("x-signature-sha256");
       if (!signature) {
@@ -66,7 +75,30 @@ Deno.serve(async (req) => {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
-      // Basic signature presence check - full HMAC validation could be added
+
+      const encoder = new TextEncoder();
+      const key = await crypto.subtle.importKey(
+        "raw",
+        encoder.encode(conn.webhook_secret),
+        { name: "HMAC", hash: "SHA-256" },
+        false,
+        ["sign"]
+      );
+      const signatureBytes = await crypto.subtle.sign(
+        "HMAC",
+        key,
+        encoder.encode(bodyText)
+      );
+      const computedSignature = Array.from(new Uint8Array(signatureBytes))
+        .map((b) => b.toString(16).padStart(2, "0"))
+        .join("");
+
+      if (computedSignature !== signature) {
+        return new Response(JSON.stringify({ error: "Invalid signature" }), {
+          status: 401,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
     }
 
     // Build transaction
@@ -111,7 +143,7 @@ Deno.serve(async (req) => {
   } catch (err) {
     console.error("wise-webhook error:", err);
     return new Response(
-      JSON.stringify({ error: err instanceof Error ? err.message : "Unknown error" }),
+      JSON.stringify({ error: "Internal server error" }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
