@@ -104,11 +104,10 @@ Deno.serve(async (req) => {
 
     const now = new Date();
     const intervalEnd = now.toISOString();
-    const threeYearsAgo = new Date(now);
-    threeYearsAgo.setFullYear(threeYearsAgo.getFullYear() - 3);
+    const safeStart = new Date(Date.now() - (2 * 365 + 335) * 24 * 60 * 60 * 1000);
     const intervalStart = conn.last_synced_at
       ? new Date(conn.last_synced_at).toISOString()
-      : threeYearsAgo.toISOString();
+      : safeStart.toISOString();
 
     // Build 31-day chunks
     const chunks: { start: string; end: string }[] = [];
