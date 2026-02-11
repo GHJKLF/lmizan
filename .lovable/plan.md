@@ -1,47 +1,78 @@
 
-# Fix 3 Remaining Bugs
 
-## Bug 1: created_at tiebreaker for balance sorting
+## Stripe Integration Plan
 
-When multiple transactions share the same date, the sort order is arbitrary. This causes incorrect balance snapshots -- the system may pick an older balance row instead of the latest correction. Adding `created_at` as a secondary sort key ensures the most recently inserted row wins.
+This adds Stripe as a third payment provider alongside Wise and PayPal, following identical patterns.
 
-**Changes:**
+---
 
-1. **src/types/index.ts** -- Add `createdAt?: string` to the `Transaction` interface (after `balanceReserved`).
+### 1. Database Migration
 
-2. **src/services/dataService.ts** (line 92) -- Add `createdAt: row.created_at,` to the mapping object inside `fetchTransactions()`.
+**Create `stripe_connections` table:**
+- Columns: `id` (uuid PK), `user_id` (uuid, NOT NULL), `account_name` (text), `api_key` (text, encrypted at rest), `stripe_account_id` (text), `email` (text), `currency` (text), `environment` (text, default 'live'), `last_synced_at` (timestamptz), `created_at` (timestamptz), `updated_at` (timestamptz)
+- RLS policies: authenticated users can SELECT/INSERT/UPDATE/DELETE their own rows (`auth.uid() = user_id`)
 
-3. **src/services/balanceEngine.ts** (line 57) -- Replace the simple date sort with a two-level sort:
-   - Primary: date descending
-   - Secondary: `createdAt` descending (later `created_at` wins for same-date transactions)
+**Create `stripe_connections_safe` view:**
+- Excludes `api_key` column (same pattern as `paypal_connections_safe` and `wise_connections_safe`)
 
-## Bug 2: Wrong account names in sidebar
+**Create `get_stripe_connection_with_key` security definer function:**
+- Returns full row including `api_key` for use by edge functions only
 
-`fetchAccounts()` currently merges three sources (hardcoded ACCOUNTS constant, accounts DB table, localStorage), producing phantom accounts that have no transactions.
+---
 
-**Changes:**
+### 2. Edge Functions
 
-1. **src/services/dataService.ts** (lines 96-102) -- Replace the entire `fetchAccounts()` body with a single query: `SELECT DISTINCT account FROM transactions ORDER BY account`. This ensures only accounts that actually have transaction data appear in the sidebar.
+**a) `stripe-discover`**
+- Input: `{ api_key }`
+- Calls `GET https://api.stripe.com/v1/account` (account info) and `GET https://api.stripe.com/v1/balance` (balances)
+- Auth: `Authorization: Bearer <api_key>`
+- Returns: `{ account_id, email, currencies, balances: [{ currency, available, pending, total }] }`
+- Amounts divided by 100 (except zero-decimal currencies like JPY, KRW, etc.)
 
-## Bug 3: Account detail shows single combined balance instead of per-currency breakdown
+**b) `stripe-sync`**
+- Input: `{ connection_id }`
+- Reads API key via `get_stripe_connection_with_key` RPC
+- Paginates `GET /v1/balance_transactions?limit=100&starting_after=...`
+- Maps each transaction:
+  - Amount: `net / 100` (already fee-inclusive), sign-based type detection
+  - Type mapping: charge/payment -> Inflow; payout/refund/stripe_fee/dispute -> Outflow; adjustment -> sign-based
+  - Dedup key: `stripe_bt:{id}` in notes column
+  - Fee info appended to notes: `Fee: -X.XX CUR | Gross: X.XX CUR`
+- Handles zero-decimal currencies
+- Updates `last_synced_at` after completion
 
-Currently, `Dashboard.tsx` passes a single `summary` to `AccountDashboard`. But since summaries are now keyed by `account-currency` pair (e.g., `"Wise Grunkauf-EUR"`), `summaries.find(s => s.account === selectedAccount)` no longer matches because `s.account` is `"Wise Grunkauf-EUR"`.
+**c) `stripe-balances`**
+- Input: `{ connection_id }`
+- Calls `GET /v1/balance` using stored API key
+- Returns per-currency available, pending, and total amounts (divided by 100)
 
-**Changes:**
+**Config:** Add all three functions to `supabase/config.toml` with `verify_jwt = false`
 
-1. **src/services/balanceEngine.ts** (line 84) -- Store the original account name (without currency suffix) in the summary. Currently `account` is set from the map key which is `"AccountName-Currency"`. Change to store the original `latest.account` so `summary.account` remains the clean account name (e.g., `"Wise Grunkauf"`).
+---
 
-2. **src/components/dashboard/Dashboard.tsx** (lines 39-48) -- Instead of passing a single `summary`, filter all summaries matching `selectedAccount` and pass the array. Change `AccountDashboard` props from `summary: AccountSummary | undefined` to `summaries: AccountSummary[]`.
+### 3. UI Components
 
-3. **src/components/dashboard/AccountDashboard.tsx** -- Update the component to:
-   - Accept `summaries: AccountSummary[]` instead of `summary: AccountSummary | undefined`
-   - Render one balance card group per currency (each showing Balance, Available, Reserved in its native currency)
-   - Display currency label (e.g., "EUR LIQUIDITY", "USD LIQUIDITY") as a header for each group
+**a) `StripeConnectionWizard.tsx`**
+- 2-step dialog matching PayPal wizard pattern
+- Step 1: API key input (password field) + "Discover Account" button calling `stripe-discover`
+- Step 2: Shows account ID, email, per-currency balances (available + pending). Account name input + "Connect" button saves to `stripe_connections` and triggers initial `stripe-sync`
 
-## Technical Details
+**b) Settings page updates (`src/pages/Settings.tsx`)**
+- Add "Stripe Integrations" section with "Connect Stripe Account" button
+- List Stripe connections with Sync, View Balances, and Delete actions (same UI pattern as PayPal section)
+- Import `StripeConnectionWizard`
 
-| Bug | Files Modified | Key Change |
-|-----|---------------|------------|
-| 1 | types/index.ts, dataService.ts, balanceEngine.ts | Add createdAt field + secondary sort |
-| 2 | dataService.ts | Replace fetchAccounts with DISTINCT query on transactions |
-| 3 | balanceEngine.ts, Dashboard.tsx, AccountDashboard.tsx | Store clean account name in summaries, pass array of summaries, render per-currency cards |
+**c) Index.tsx (Sync All)**
+- Add Stripe connections to the `handleSyncAll` flow: query `stripe_connections`, invoke `stripe-sync` for each
+- Update the "no connections" check to include Stripe
+
+---
+
+### 4. Technical Details
+
+- Zero-decimal currency list: JPY, KRW, BIF, CLP, DJF, GNF, ISK, KMF, MGA, PYG, RWF, UGX, VND, VUV, XAF, XOF, XPF
+- Stripe auth: `Authorization: Bearer sk_live_...` header on all API calls
+- No date windowing needed -- cursor-based pagination fetches full history
+- `account` field in transactions set to `conn.account_name`
+- Stripe brand color: `#635bff` for UI consistency
+
