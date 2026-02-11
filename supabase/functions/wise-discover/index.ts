@@ -78,7 +78,7 @@ Deno.serve(async (req) => {
         }
         const fullName = p.type === "PERSONAL"
           ? (`${p.details?.firstName || ""} ${p.details?.lastName || ""}`.trim() || `Profile ${p.id}`)
-          : (p.details?.companyName || p.details?.tradingName || p.details?.name || `Profile ${p.id}`);
+          : (p.details?.companyName || p.details?.tradingName || p.fullName || p.details?.name || `Profile ${p.id}`);
         return {
           id: p.id,
           fullName,
