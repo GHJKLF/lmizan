@@ -162,11 +162,6 @@ Deno.serve(async (req) => {
 
     // Map and filter transactions
     const mapped = allTxDetails
-      .filter((td: any) => {
-        // Filter out T00xx currency conversion events to avoid double-counting
-        const eventCode = td.transaction_info?.transaction_event_code || "";
-        return !eventCode.startsWith("T00");
-      })
       .map((td: any) => {
         const info = td.transaction_info || {};
         const payer = td.payer_info || {};
