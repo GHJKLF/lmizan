@@ -55,24 +55,15 @@ Deno.serve(async (req) => {
       "Content-Type": "application/x-www-form-urlencoded",
     };
 
-    // Fetch account info and balance in parallel
-    const [accountRes, balanceRes] = await Promise.all([
-      fetch("https://api.stripe.com/v1/account", { headers: stripeHeaders }),
-      fetch("https://api.stripe.com/v1/balance", { headers: stripeHeaders }),
-    ]);
-
-    if (!accountRes.ok) {
-      const errText = await accountRes.text();
-      if (accountRes.status === 401) throw new Error("Invalid Stripe API key");
-      throw new Error(`Stripe Account API error [${accountRes.status}]: ${errText}`);
-    }
+    // Only call /v1/balance (restricted keys lack /v1/account permission)
+    const balanceRes = await fetch("https://api.stripe.com/v1/balance", { headers: stripeHeaders });
 
     if (!balanceRes.ok) {
       const errText = await balanceRes.text();
+      if (balanceRes.status === 401) throw new Error("Invalid Stripe API key");
       throw new Error(`Stripe Balance API error [${balanceRes.status}]: ${errText}`);
     }
 
-    const account = await accountRes.json();
     const balance = await balanceRes.json();
 
     // Build per-currency balances
@@ -99,8 +90,8 @@ Deno.serve(async (req) => {
 
     return new Response(
       JSON.stringify({
-        account_id: account.id,
-        email: account.email || "",
+        account_id: "Stripe Account",
+        email: "",
         currencies: Object.keys(currencyMap),
         balances,
       }),
