@@ -35,6 +35,48 @@ export type Database = {
         }
         Relationships: []
       }
+      paypal_connections: {
+        Row: {
+          account_name: string
+          client_id: string
+          client_secret: string
+          created_at: string | null
+          currency: string | null
+          email: string | null
+          environment: string | null
+          id: string
+          last_synced_at: string | null
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          account_name: string
+          client_id: string
+          client_secret: string
+          created_at?: string | null
+          currency?: string | null
+          email?: string | null
+          environment?: string | null
+          id?: string
+          last_synced_at?: string | null
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          account_name?: string
+          client_id?: string
+          client_secret?: string
+          created_at?: string | null
+          currency?: string | null
+          email?: string | null
+          environment?: string | null
+          id?: string
+          last_synced_at?: string | null
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       transactions: {
         Row: {
           account: string | null
@@ -133,6 +175,42 @@ export type Database = {
       }
     }
     Views: {
+      paypal_connections_safe: {
+        Row: {
+          account_name: string | null
+          created_at: string | null
+          currency: string | null
+          email: string | null
+          environment: string | null
+          id: string | null
+          last_synced_at: string | null
+          updated_at: string | null
+          user_id: string | null
+        }
+        Insert: {
+          account_name?: string | null
+          created_at?: string | null
+          currency?: string | null
+          email?: string | null
+          environment?: string | null
+          id?: string | null
+          last_synced_at?: string | null
+          updated_at?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          account_name?: string | null
+          created_at?: string | null
+          currency?: string | null
+          email?: string | null
+          environment?: string | null
+          id?: string | null
+          last_synced_at?: string | null
+          updated_at?: string | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       wise_connections_safe: {
         Row: {
           account_name: string | null
@@ -171,6 +249,20 @@ export type Database = {
       }
     }
     Functions: {
+      get_paypal_connection_with_secret: {
+        Args: { p_connection_id: string }
+        Returns: {
+          account_name: string
+          client_id: string
+          client_secret: string
+          currency: string
+          email: string
+          environment: string
+          id: string
+          last_synced_at: string
+          user_id: string
+        }[]
+      }
       get_wise_connection_with_token: {
         Args: { p_connection_id: string }
         Returns: {

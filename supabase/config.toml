@@ -20,3 +20,12 @@ verify_jwt = false
 
 [functions.wise-discover]
 verify_jwt = false
+
+[functions.paypal-discover]
+verify_jwt = false
+
+[functions.paypal-sync]
+verify_jwt = false
+
+[functions.paypal-balances]
+verify_jwt = false
