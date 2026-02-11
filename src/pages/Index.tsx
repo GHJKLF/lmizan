@@ -60,7 +60,20 @@ const Index: React.FC = () => {
         }
       }
 
-      if (!wiseConns?.length && !paypalConns?.length) {
+      // Sync Stripe connections
+      const { data: stripeConns } = await supabase
+        .from('stripe_connections' as any)
+        .select('id, account_name');
+      if (stripeConns && stripeConns.length > 0) {
+        for (const conn of stripeConns as any[]) {
+          const res = await supabase.functions.invoke('stripe-sync', {
+            body: { connection_id: conn.id },
+          });
+          if (!res.error && res.data) totalInserted += res.data.synced || 0;
+        }
+      }
+
+      if (!wiseConns?.length && !paypalConns?.length && !stripeConns?.length) {
         toast.info('No connections configured. Go to Settings to add one.');
       } else {
         toast.success(`Sync complete: ${totalInserted} new transactions`);

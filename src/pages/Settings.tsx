@@ -12,6 +12,7 @@ import {
   Eye,
   ChevronDown,
   CreditCard,
+  Zap,
 } from 'lucide-react';
 import {
   Popover,
@@ -20,6 +21,7 @@ import {
 } from '@/components/ui/popover';
 import WiseConnectionWizard from '@/components/WiseConnectionWizard';
 import PayPalConnectionWizard from '@/components/PayPalConnectionWizard';
+import StripeConnectionWizard from '@/components/StripeConnectionWizard';
 
 interface WiseConnection {
   id: string;
@@ -41,6 +43,17 @@ interface PayPalConnection {
   created_at: string;
 }
 
+interface StripeConnection {
+  id: string;
+  account_name: string;
+  stripe_account_id: string | null;
+  email: string | null;
+  currency: string | null;
+  environment: string | null;
+  last_synced_at: string | null;
+  created_at: string;
+}
+
 interface WiseBalance {
   id: number;
   currency: string;
@@ -54,25 +67,39 @@ interface PayPalBalance {
   total: number;
 }
 
+interface StripeBalance {
+  currency: string;
+  available: number;
+  pending: number;
+  total: number;
+}
+
+const STRIPE_COLOR = '#635bff';
+
 const Settings: React.FC = () => {
   const navigate = useNavigate();
   const [connections, setConnections] = useState<WiseConnection[]>([]);
   const [paypalConnections, setPaypalConnections] = useState<PayPalConnection[]>([]);
+  const [stripeConnections, setStripeConnections] = useState<StripeConnection[]>([]);
   const [loading, setLoading] = useState(true);
   const [syncingId, setSyncingId] = useState<string | null>(null);
   const [testingId, setTestingId] = useState<string | null>(null);
   const [wizardOpen, setWizardOpen] = useState(false);
   const [paypalWizardOpen, setPaypalWizardOpen] = useState(false);
+  const [stripeWizardOpen, setStripeWizardOpen] = useState(false);
   const [balancesLoading, setBalancesLoading] = useState<string | null>(null);
   const [balancesData, setBalancesData] = useState<{ connId: string; balances: WiseBalance[] } | null>(null);
   const [paypalBalancesLoading, setPaypalBalancesLoading] = useState<string | null>(null);
   const [paypalBalancesData, setPaypalBalancesData] = useState<{ connId: string; balances: PayPalBalance[] } | null>(null);
   const [paypalSyncingId, setPaypalSyncingId] = useState<string | null>(null);
+  const [stripeSyncingId, setStripeSyncingId] = useState<string | null>(null);
+  const [stripeBalancesLoading, setStripeBalancesLoading] = useState<string | null>(null);
+  const [stripeBalancesData, setStripeBalancesData] = useState<{ connId: string; balances: StripeBalance[] } | null>(null);
 
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      const [wiseRes, paypalRes] = await Promise.all([
+      const [wiseRes, paypalRes, stripeRes] = await Promise.all([
         supabase
           .from('wise_connections_safe' as any)
           .select('id, account_name, profile_id, balance_id, currency, last_synced_at, created_at')
@@ -81,9 +108,14 @@ const Settings: React.FC = () => {
           .from('paypal_connections_safe' as any)
           .select('id, account_name, email, currency, environment, last_synced_at, created_at')
           .order('created_at', { ascending: false }),
+        supabase
+          .from('stripe_connections_safe' as any)
+          .select('id, account_name, stripe_account_id, email, currency, environment, last_synced_at, created_at')
+          .order('created_at', { ascending: false }),
       ]);
       setConnections((wiseRes.data as unknown as WiseConnection[]) || []);
       setPaypalConnections((paypalRes.data as unknown as PayPalConnection[]) || []);
+      setStripeConnections((stripeRes.data as unknown as StripeConnection[]) || []);
     } catch (e) {
       console.error(e);
     } finally {
@@ -187,6 +219,46 @@ const Settings: React.FC = () => {
       toast.error(err.message || 'Failed to fetch PayPal balances');
     } finally {
       setPaypalBalancesLoading(null);
+    }
+  };
+
+  // Stripe handlers
+  const handleStripeDelete = async (id: string) => {
+    if (!confirm('Delete this Stripe connection?')) return;
+    const { error } = await supabase.from('stripe_connections' as any).delete().eq('id', id);
+    if (error) toast.error('Failed to delete');
+    else { toast.success('Stripe connection deleted'); await loadData(); }
+  };
+
+  const handleStripeSync = async (id: string) => {
+    setStripeSyncingId(id);
+    try {
+      const res = await supabase.functions.invoke('stripe-sync', {
+        body: { connection_id: id },
+      });
+      if (res.error) throw res.error;
+      const result = res.data;
+      toast.success(`Stripe synced: ${result.synced} new transactions`);
+      await loadData();
+    } catch (err: any) {
+      toast.error(err.message || 'Stripe sync failed');
+    } finally {
+      setStripeSyncingId(null);
+    }
+  };
+
+  const handleStripeViewBalances = async (id: string) => {
+    setStripeBalancesLoading(id);
+    try {
+      const res = await supabase.functions.invoke('stripe-balances', {
+        body: { connection_id: id },
+      });
+      if (res.error) throw res.error;
+      setStripeBalancesData({ connId: id, balances: res.data.balances || [] });
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to fetch Stripe balances');
+    } finally {
+      setStripeBalancesLoading(null);
     }
   };
 
@@ -362,7 +434,7 @@ const Settings: React.FC = () => {
         </section>
 
         {/* PayPal Integrations */}
-        <section>
+        <section className="mb-10">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-lg font-bold text-foreground flex items-center gap-2">
               <CreditCard size={18} className="text-[#0070ba]" />
@@ -488,6 +560,134 @@ const Settings: React.FC = () => {
           )}
         </section>
 
+        {/* Stripe Integrations */}
+        <section className="mb-10">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-bold text-foreground flex items-center gap-2">
+              <Zap size={18} style={{ color: STRIPE_COLOR }} />
+              Stripe Integrations
+            </h2>
+            <button
+              onClick={() => setStripeWizardOpen(true)}
+              className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-white rounded-lg transition-opacity hover:opacity-90"
+              style={{ backgroundColor: STRIPE_COLOR }}
+            >
+              <Zap size={14} />
+              Connect Stripe Account
+            </button>
+          </div>
+
+          {loading ? (
+            <div className="flex justify-center py-12">
+              <Loader2 className="animate-spin text-muted-foreground" size={24} />
+            </div>
+          ) : stripeConnections.length === 0 ? (
+            <div className="text-center py-12 text-muted-foreground border border-dashed border-border rounded-xl">
+              <Zap size={32} className="mx-auto mb-3 opacity-40" />
+              <p className="text-sm">No Stripe connections configured yet.</p>
+              <p className="text-xs mt-1">Connect your Stripe account to start syncing transactions.</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {stripeConnections.map((conn) => (
+                <div
+                  key={conn.id}
+                  className="flex items-center justify-between p-4 bg-card border border-border rounded-xl"
+                >
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <Zap size={14} style={{ color: STRIPE_COLOR }} />
+                      <span className="font-semibold text-foreground text-sm">{conn.account_name}</span>
+                      {conn.currency && (
+                        <span className="text-xs px-2 py-0.5 bg-accent rounded-full text-muted-foreground font-medium">
+                          {conn.currency}
+                        </span>
+                      )}
+                    </div>
+                    {conn.email && (
+                      <p className="text-xs text-muted-foreground mt-1">{conn.email}</p>
+                    )}
+                    <p className="text-xs text-muted-foreground">
+                      Last synced: {conn.last_synced_at
+                        ? new Date(conn.last_synced_at).toLocaleString()
+                        : 'Never'}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-1.5 ml-3">
+                    {/* View Balances */}
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <button
+                          onClick={() => handleStripeViewBalances(conn.id)}
+                          disabled={stripeBalancesLoading === conn.id}
+                          className="p-2 text-muted-foreground rounded-lg transition-colors disabled:opacity-50"
+                          style={{ color: stripeBalancesLoading === conn.id ? undefined : undefined }}
+                          title="View Balances"
+                        >
+                          {stripeBalancesLoading === conn.id ? (
+                            <Loader2 size={14} className="animate-spin" />
+                          ) : (
+                            <Eye size={14} />
+                          )}
+                        </button>
+                      </PopoverTrigger>
+                      {stripeBalancesData?.connId === conn.id && (
+                        <PopoverContent className="w-72 p-0" align="end">
+                          <div className="p-3 border-b border-border">
+                            <p className="text-xs font-bold text-foreground">Stripe Balances</p>
+                          </div>
+                          {stripeBalancesData.balances.length === 0 ? (
+                            <p className="p-3 text-xs text-muted-foreground">No balances found.</p>
+                          ) : (
+                            <div className="p-2 space-y-1">
+                              {stripeBalancesData.balances.map((b) => (
+                                <div key={b.currency} className="flex items-center justify-between px-2 py-1.5 rounded-md hover:bg-accent">
+                                  <span className="text-xs font-medium text-foreground">{b.currency}</span>
+                                  <div className="text-right">
+                                    <span className="text-xs font-semibold text-foreground">
+                                      {b.available.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                    </span>
+                                    {b.pending !== 0 && (
+                                      <span className="text-[10px] text-muted-foreground ml-1">
+                                        +{b.pending.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} pending
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </PopoverContent>
+                      )}
+                    </Popover>
+                    {/* Sync */}
+                    <button
+                      onClick={() => handleStripeSync(conn.id)}
+                      disabled={stripeSyncingId === conn.id}
+                      className="p-2 text-muted-foreground rounded-lg transition-colors disabled:opacity-50"
+                      title="Sync Now"
+                    >
+                      {stripeSyncingId === conn.id ? (
+                        <Loader2 size={14} className="animate-spin" />
+                      ) : (
+                        <RefreshCw size={14} />
+                      )}
+                    </button>
+                    {/* Delete */}
+                    <button
+                      onClick={() => handleStripeDelete(conn.id)}
+                      className="p-2 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-lg transition-colors"
+                      title="Delete"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+
         <WiseConnectionWizard
           open={wizardOpen}
           onOpenChange={setWizardOpen}
@@ -496,6 +696,11 @@ const Settings: React.FC = () => {
         <PayPalConnectionWizard
           isOpen={paypalWizardOpen}
           onClose={() => setPaypalWizardOpen(false)}
+          onSuccess={loadData}
+        />
+        <StripeConnectionWizard
+          isOpen={stripeWizardOpen}
+          onClose={() => setStripeWizardOpen(false)}
           onSuccess={loadData}
         />
       </div>
