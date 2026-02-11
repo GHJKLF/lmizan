@@ -166,17 +166,19 @@ Deno.serve(async (req) => {
         const info = td.transaction_info || {};
         const payer = td.payer_info || {};
         const txId = info.transaction_id || "";
-        const amountVal = parseFloat(info.transaction_amount?.value || "0");
-        const type = amountVal >= 0 ? "Inflow" : "Outflow";
-        const amount = Math.abs(amountVal);
+        const grossAmount = parseFloat(info.transaction_amount?.value || "0");
+        const feeAmount = parseFloat(info.fee_amount?.value || "0");
+        const netAmount = grossAmount + feeAmount; // fee is negative
+        const type = netAmount >= 0 ? "Inflow" : "Outflow";
+        const amount = Math.abs(netAmount);
         const date = (info.transaction_initiation_date || "").split("T")[0];
         const description =
           info.transaction_subject ||
           info.transaction_note ||
           payer.payer_name?.alternate_full_name ||
           "PayPal Transaction";
-        const fee = info.fee_amount?.value || "0";
         const currency = info.transaction_amount?.currency_code || conn.currency || "USD";
+        const feeNote = feeAmount !== 0 ? ` | Fee: ${feeAmount} ${currency}` : "";
 
         return {
           id: crypto.randomUUID(),
@@ -187,7 +189,7 @@ Deno.serve(async (req) => {
           type,
           account: conn.account_name,
           category: "Uncategorized",
-          notes: `paypal_tx:${txId} fee:${fee}`,
+          notes: `paypal_tx:${txId}${feeNote}`,
           running_balance: null,
           user_id: conn.user_id,
           _paypal_id: txId,
