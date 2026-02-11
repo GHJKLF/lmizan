@@ -6,6 +6,66 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
+async function fetchBalanceStatements(
+  profileId: string,
+  balanceId: string,
+  currency: string,
+  token: string,
+  privateKeyPem: string,
+  intervalStart: string,
+  intervalEnd: string
+): Promise<any[]> {
+  const url = `https://api.wise.com/v1/profiles/${profileId}/balance-statements/${balanceId}/statement.json?currency=${currency}&intervalStart=${encodeURIComponent(intervalStart)}&intervalEnd=${encodeURIComponent(intervalEnd)}&type=COMPACT`;
+
+  let res = await fetch(url, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+
+  if (res.status === 403) {
+    const ott = res.headers.get("x-2fa-approval");
+    if (ott) {
+      const pemBody = privateKeyPem
+        .replace("-----BEGIN PRIVATE KEY-----", "")
+        .replace("-----END PRIVATE KEY-----", "")
+        .replace(/\s/g, "");
+      const binaryDer = Uint8Array.from(atob(pemBody), (c) => c.charCodeAt(0));
+
+      const cryptoKey = await crypto.subtle.importKey(
+        "pkcs8",
+        binaryDer,
+        { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" },
+        false,
+        ["sign"]
+      );
+
+      const signature = await crypto.subtle.sign(
+        "RSASSA-PKCS1-v1_5",
+        cryptoKey,
+        new TextEncoder().encode(ott)
+      );
+      const signatureBase64 = btoa(
+        String.fromCharCode(...new Uint8Array(signature))
+      );
+
+      res = await fetch(url, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "x-2fa-approval": ott,
+          "X-Signature": signatureBase64,
+        },
+      });
+    }
+  }
+
+  if (!res.ok) {
+    const errText = await res.text();
+    throw new Error(`Balance Statements API error [${res.status}]: ${errText}`);
+  }
+
+  const data = await res.json();
+  return data.transactions || [];
+}
+
 async function fetchAllTransfers(
   profileId: string,
   token: string,
@@ -96,70 +156,135 @@ Deno.serve(async (req) => {
         ? new Date(conn.last_synced_at).toISOString()
         : "2020-01-01T00:00:00.000Z";
 
-    const transfers = await fetchAllTransfers(
-      conn.profile_id,
-      conn.api_token,
-      intervalStart,
-      intervalEnd
-    );
+    let newTxs: any[];
 
-    if (transfers.length === 0) {
-      await supabaseAdmin
-        .from("wise_connections")
-        .update({ last_synced_at: new Date().toISOString() })
-        .eq("id", wise_connection_id);
-
-      return new Response(
-        JSON.stringify({ inserted: 0, total: 0 }),
-        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    if (conn.private_key && conn.balance_id) {
+      console.log("Using Balance Statements API with SCA for connection", wise_connection_id);
+      const statements = await fetchBalanceStatements(
+        conn.profile_id,
+        conn.balance_id,
+        conn.currency,
+        conn.api_token,
+        conn.private_key,
+        intervalStart,
+        intervalEnd
       );
+
+      if (statements.length === 0) {
+        await supabaseAdmin
+          .from("wise_connections")
+          .update({ last_synced_at: new Date().toISOString() })
+          .eq("id", wise_connection_id);
+        return new Response(
+          JSON.stringify({ inserted: 0, total: 0 }),
+          { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      const { data: existingTxs } = await supabaseAdmin
+        .from("transactions")
+        .select("notes")
+        .eq("account", conn.account_name)
+        .eq("user_id", conn.user_id);
+
+      const existingRefs = new Set(
+        (existingTxs || [])
+          .map((t: any) => {
+            const match = (t.notes || "").match(/wise_ref:(.+)/);
+            return match ? match[1] : null;
+          })
+          .filter(Boolean)
+      );
+
+      const mapped = statements.map((st: any) => {
+        const amount = Math.abs(st.amount?.value || 0);
+        const date = (st.date || "").split("T")[0];
+        const description = st.details?.description || st.details?.type || "Wise Transaction";
+        const type = st.type === "CREDIT" ? "Inflow" : "Outflow";
+        const refNumber = st.referenceNumber || "";
+
+        return {
+          id: crypto.randomUUID(),
+          date,
+          amount,
+          currency: st.amount?.currency || conn.currency,
+          description,
+          type,
+          account: conn.account_name,
+          category: "Uncategorized",
+          notes: `wise_ref:${refNumber}`,
+          running_balance: st.runningBalance?.value ?? null,
+          user_id: conn.user_id,
+          _wise_ref: refNumber,
+        };
+      });
+
+      newTxs = mapped.filter((t: any) => !existingRefs.has(t._wise_ref));
+    } else {
+      console.log("Using Transfers API fallback for connection", wise_connection_id);
+      const transfers = await fetchAllTransfers(
+        conn.profile_id,
+        conn.api_token,
+        intervalStart,
+        intervalEnd
+      );
+
+      if (transfers.length === 0) {
+        await supabaseAdmin
+          .from("wise_connections")
+          .update({ last_synced_at: new Date().toISOString() })
+          .eq("id", wise_connection_id);
+        return new Response(
+          JSON.stringify({ inserted: 0, total: 0 }),
+          { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      const { data: existingTxs } = await supabaseAdmin
+        .from("transactions")
+        .select("notes")
+        .eq("account", conn.account_name)
+        .eq("user_id", conn.user_id);
+
+      const existingIds = new Set(
+        (existingTxs || [])
+          .map((t: any) => {
+            const match = (t.notes || "").match(/wise_transfer_id:(\d+)/);
+            return match ? match[1] : null;
+          })
+          .filter(Boolean)
+      );
+
+      const mapped = transfers.map((tr: any) => {
+        const amount = Math.abs(tr.sourceValue || 0);
+        const date = (tr.created || "").split("T")[0];
+        const recipientName = tr.targetAccount?.name?.fullName || tr.targetAccount?.name || "";
+        const reference = tr.details?.reference || "";
+        const descParts = [recipientName, reference].filter(Boolean);
+        const description = descParts.length > 0 ? descParts.join(" – ") : "Wise Transfer";
+
+        return {
+          id: crypto.randomUUID(),
+          date,
+          amount,
+          currency: tr.sourceCurrency || conn.currency,
+          description,
+          type: "Outflow",
+          account: conn.account_name,
+          category: "Uncategorized",
+          notes: `wise_transfer_id:${tr.id}`,
+          running_balance: null,
+          user_id: conn.user_id,
+          _wise_id: String(tr.id),
+        };
+      });
+
+      newTxs = mapped.filter((t: any) => !existingIds.has(t._wise_id));
     }
-
-    // Fetch existing fingerprints for dedup
-    const { data: existingTxs } = await supabaseAdmin
-      .from("transactions")
-      .select("notes")
-      .eq("account", conn.account_name)
-      .eq("user_id", conn.user_id);
-
-    const existingIds = new Set(
-      (existingTxs || [])
-        .map((t: any) => {
-          const match = (t.notes || "").match(/^wise_transfer_id:(\d+)/);
-          return match ? match[1] : null;
-        })
-        .filter(Boolean)
-    );
-
-    const mapped = transfers.map((tr: any) => {
-      const amount = Math.abs(tr.sourceValue || 0);
-      const date = (tr.created || "").split("T")[0];
-      const recipientName = tr.targetAccount?.name?.fullName || tr.targetAccount?.name || "";
-      const reference = tr.details?.reference || "";
-      const descParts = [recipientName, reference].filter(Boolean);
-      const description = descParts.length > 0 ? descParts.join(" – ") : "Wise Transfer";
-
-      return {
-        id: crypto.randomUUID(),
-        date,
-        amount,
-        currency: tr.sourceCurrency || conn.currency,
-        description,
-        type: "Outflow",
-        account: conn.account_name,
-        category: "Uncategorized",
-        notes: `wise_transfer_id:${tr.id}`,
-        running_balance: null,
-        user_id: conn.user_id,
-        _wise_id: String(tr.id),
-      };
-    });
-
-    const newTxs = mapped.filter((t: any) => !existingIds.has(t._wise_id));
 
     let inserted = 0;
     if (newTxs.length > 0) {
-      const payloads = newTxs.map(({ _wise_id, ...rest }: any) => rest);
+      const payloads = newTxs.map(({ _wise_id, _wise_ref, ...rest }: any) => rest);
       const CHUNK = 500;
       for (let i = 0; i < payloads.length; i += CHUNK) {
         const chunk = payloads.slice(i, i + CHUNK);
@@ -177,7 +302,7 @@ Deno.serve(async (req) => {
       .eq("id", wise_connection_id);
 
     return new Response(
-      JSON.stringify({ inserted, total: transfers.length }),
+      JSON.stringify({ inserted, total: newTxs.length }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (err) {
