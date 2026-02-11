@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
-import { DataService } from '@/services/dataService';
 import { toast } from 'sonner';
 import {
   ArrowLeft,
@@ -12,6 +11,7 @@ import {
   Wifi,
   Eye,
   ChevronDown,
+  CreditCard,
 } from 'lucide-react';
 import {
   Popover,
@@ -19,6 +19,7 @@ import {
   PopoverTrigger,
 } from '@/components/ui/popover';
 import WiseConnectionWizard from '@/components/WiseConnectionWizard';
+import PayPalConnectionWizard from '@/components/PayPalConnectionWizard';
 
 interface WiseConnection {
   id: string;
@@ -30,30 +31,59 @@ interface WiseConnection {
   created_at: string;
 }
 
+interface PayPalConnection {
+  id: string;
+  account_name: string;
+  email: string | null;
+  currency: string | null;
+  environment: string | null;
+  last_synced_at: string | null;
+  created_at: string;
+}
+
 interface WiseBalance {
   id: number;
   currency: string;
   amount: number;
 }
 
+interface PayPalBalance {
+  currency: string;
+  available: number;
+  withheld: number;
+  total: number;
+}
+
 const Settings: React.FC = () => {
   const navigate = useNavigate();
   const [connections, setConnections] = useState<WiseConnection[]>([]);
+  const [paypalConnections, setPaypalConnections] = useState<PayPalConnection[]>([]);
   const [loading, setLoading] = useState(true);
   const [syncingId, setSyncingId] = useState<string | null>(null);
   const [testingId, setTestingId] = useState<string | null>(null);
   const [wizardOpen, setWizardOpen] = useState(false);
+  const [paypalWizardOpen, setPaypalWizardOpen] = useState(false);
   const [balancesLoading, setBalancesLoading] = useState<string | null>(null);
   const [balancesData, setBalancesData] = useState<{ connId: string; balances: WiseBalance[] } | null>(null);
+  const [paypalBalancesLoading, setPaypalBalancesLoading] = useState<string | null>(null);
+  const [paypalBalancesData, setPaypalBalancesData] = useState<{ connId: string; balances: PayPalBalance[] } | null>(null);
+  const [paypalSyncingId, setPaypalSyncingId] = useState<string | null>(null);
 
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      const { data: conns } = await supabase
-        .from('wise_connections_safe' as any)
-        .select('id, account_name, profile_id, balance_id, currency, last_synced_at, created_at')
-        .order('created_at', { ascending: false });
-      setConnections((conns as unknown as WiseConnection[]) || []);
+      const [wiseRes, paypalRes] = await Promise.all([
+        supabase
+          .from('wise_connections_safe' as any)
+          .select('id, account_name, profile_id, balance_id, currency, last_synced_at, created_at')
+          .order('created_at', { ascending: false }),
+        supabase
+          .from('paypal_connections_safe' as any)
+          .select('id, account_name, email, currency, environment, last_synced_at, created_at')
+          .order('created_at', { ascending: false }),
+      ]);
+      setConnections((wiseRes.data as unknown as WiseConnection[]) || []);
+      setPaypalConnections((paypalRes.data as unknown as PayPalConnection[]) || []);
     } catch (e) {
       console.error(e);
     } finally {
@@ -65,6 +95,7 @@ const Settings: React.FC = () => {
     loadData();
   }, [loadData]);
 
+  // Wise handlers
   const handleDelete = async (id: string) => {
     if (!confirm('Delete this Wise connection?')) return;
     const { error } = await supabase.from('wise_connections').delete().eq('id', id);
@@ -119,6 +150,46 @@ const Settings: React.FC = () => {
     }
   };
 
+  // PayPal handlers
+  const handlePayPalDelete = async (id: string) => {
+    if (!confirm('Delete this PayPal connection?')) return;
+    const { error } = await supabase.from('paypal_connections' as any).delete().eq('id', id);
+    if (error) toast.error('Failed to delete');
+    else { toast.success('PayPal connection deleted'); await loadData(); }
+  };
+
+  const handlePayPalSync = async (id: string) => {
+    setPaypalSyncingId(id);
+    try {
+      const res = await supabase.functions.invoke('paypal-sync', {
+        body: { connection_id: id },
+      });
+      if (res.error) throw res.error;
+      const result = res.data;
+      toast.success(`PayPal synced: ${result.synced} new transactions`);
+      await loadData();
+    } catch (err: any) {
+      toast.error(err.message || 'PayPal sync failed');
+    } finally {
+      setPaypalSyncingId(null);
+    }
+  };
+
+  const handlePayPalViewBalances = async (id: string) => {
+    setPaypalBalancesLoading(id);
+    try {
+      const res = await supabase.functions.invoke('paypal-balances', {
+        body: { connection_id: id },
+      });
+      if (res.error) throw res.error;
+      setPaypalBalancesData({ connId: id, balances: res.data.balances || [] });
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to fetch PayPal balances');
+    } finally {
+      setPaypalBalancesLoading(null);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-background">
       <div className="max-w-3xl mx-auto px-6 py-8">
@@ -137,7 +208,7 @@ const Settings: React.FC = () => {
         </div>
 
         {/* Wise Integrations */}
-        <section>
+        <section className="mb-10">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-lg font-bold text-foreground flex items-center gap-2">
               <Wifi size={18} className="text-emerald-500" />
@@ -186,7 +257,6 @@ const Settings: React.FC = () => {
                     </p>
                   </div>
                   <div className="flex items-center gap-1.5 ml-3">
-                    {/* View Balances */}
                     <Popover>
                       <PopoverTrigger asChild>
                         <button
@@ -224,7 +294,6 @@ const Settings: React.FC = () => {
                         </PopoverContent>
                       )}
                     </Popover>
-                    {/* Test */}
                     <button
                       onClick={() => handleTest(conn.id)}
                       disabled={testingId === conn.id}
@@ -237,7 +306,6 @@ const Settings: React.FC = () => {
                         <CheckCircle size={14} />
                       )}
                     </button>
-                    {/* Sync with dropdown */}
                     <Popover>
                       <PopoverTrigger asChild>
                         <div className="flex items-center">
@@ -279,9 +347,135 @@ const Settings: React.FC = () => {
                         </button>
                       </PopoverContent>
                     </Popover>
-                    {/* Delete */}
                     <button
                       onClick={() => handleDelete(conn.id)}
+                      className="p-2 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-lg transition-colors"
+                      title="Delete"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+
+        {/* PayPal Integrations */}
+        <section>
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-bold text-foreground flex items-center gap-2">
+              <CreditCard size={18} className="text-[#0070ba]" />
+              PayPal Integrations
+            </h2>
+            <button
+              onClick={() => setPaypalWizardOpen(true)}
+              className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-white rounded-lg transition-opacity hover:opacity-90"
+              style={{ backgroundColor: '#0070ba' }}
+            >
+              <CreditCard size={14} />
+              Connect PayPal Account
+            </button>
+          </div>
+
+          {loading ? (
+            <div className="flex justify-center py-12">
+              <Loader2 className="animate-spin text-muted-foreground" size={24} />
+            </div>
+          ) : paypalConnections.length === 0 ? (
+            <div className="text-center py-12 text-muted-foreground border border-dashed border-border rounded-xl">
+              <CreditCard size={32} className="mx-auto mb-3 opacity-40" />
+              <p className="text-sm">No PayPal connections configured yet.</p>
+              <p className="text-xs mt-1">Connect your PayPal account to start syncing transactions.</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {paypalConnections.map((conn) => (
+                <div
+                  key={conn.id}
+                  className="flex items-center justify-between p-4 bg-card border border-border rounded-xl"
+                >
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <CreditCard size={14} className="text-[#0070ba]" />
+                      <span className="font-semibold text-foreground text-sm">{conn.account_name}</span>
+                      {conn.currency && (
+                        <span className="text-xs px-2 py-0.5 bg-accent rounded-full text-muted-foreground font-medium">
+                          {conn.currency}
+                        </span>
+                      )}
+                    </div>
+                    {conn.email && (
+                      <p className="text-xs text-muted-foreground mt-1">{conn.email}</p>
+                    )}
+                    <p className="text-xs text-muted-foreground">
+                      Last synced: {conn.last_synced_at
+                        ? new Date(conn.last_synced_at).toLocaleString()
+                        : 'Never'}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-1.5 ml-3">
+                    {/* View Balances */}
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <button
+                          onClick={() => handlePayPalViewBalances(conn.id)}
+                          disabled={paypalBalancesLoading === conn.id}
+                          className="p-2 text-muted-foreground hover:text-[#0070ba] hover:bg-[#0070ba]/10 rounded-lg transition-colors disabled:opacity-50"
+                          title="View Balances"
+                        >
+                          {paypalBalancesLoading === conn.id ? (
+                            <Loader2 size={14} className="animate-spin" />
+                          ) : (
+                            <Eye size={14} />
+                          )}
+                        </button>
+                      </PopoverTrigger>
+                      {paypalBalancesData?.connId === conn.id && (
+                        <PopoverContent className="w-72 p-0" align="end">
+                          <div className="p-3 border-b border-border">
+                            <p className="text-xs font-bold text-foreground">PayPal Balances</p>
+                          </div>
+                          {paypalBalancesData.balances.length === 0 ? (
+                            <p className="p-3 text-xs text-muted-foreground">No balances found.</p>
+                          ) : (
+                            <div className="p-2 space-y-1">
+                              {paypalBalancesData.balances.map((b) => (
+                                <div key={b.currency} className="flex items-center justify-between px-2 py-1.5 rounded-md hover:bg-accent">
+                                  <span className="text-xs font-medium text-foreground">{b.currency}</span>
+                                  <div className="text-right">
+                                    <span className="text-xs font-semibold text-foreground">
+                                      {b.available.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                    </span>
+                                    {b.withheld > 0 && (
+                                      <span className="text-[10px] text-muted-foreground ml-1">
+                                        +{b.withheld.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} held
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </PopoverContent>
+                      )}
+                    </Popover>
+                    {/* Sync */}
+                    <button
+                      onClick={() => handlePayPalSync(conn.id)}
+                      disabled={paypalSyncingId === conn.id}
+                      className="p-2 text-muted-foreground hover:text-[#0070ba] hover:bg-[#0070ba]/10 rounded-lg transition-colors disabled:opacity-50"
+                      title="Sync Now"
+                    >
+                      {paypalSyncingId === conn.id ? (
+                        <Loader2 size={14} className="animate-spin" />
+                      ) : (
+                        <RefreshCw size={14} />
+                      )}
+                    </button>
+                    {/* Delete */}
+                    <button
+                      onClick={() => handlePayPalDelete(conn.id)}
                       className="p-2 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-lg transition-colors"
                       title="Delete"
                     >
@@ -298,6 +492,11 @@ const Settings: React.FC = () => {
           open={wizardOpen}
           onOpenChange={setWizardOpen}
           onComplete={loadData}
+        />
+        <PayPalConnectionWizard
+          isOpen={paypalWizardOpen}
+          onClose={() => setPaypalWizardOpen(false)}
+          onSuccess={loadData}
         />
       </div>
     </div>

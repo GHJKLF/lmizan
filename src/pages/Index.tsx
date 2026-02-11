@@ -27,31 +27,49 @@ const Index: React.FC = () => {
   const [balanceOpen, setBalanceOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [reconcilerOpen, setReconcilerOpen] = useState(false);
-  const [wisesyncing, setWisesyncing] = useState(false);
+  const [syncing, setSyncing] = useState(false);
 
-  const handleSyncAllWise = async () => {
-    setWisesyncing(true);
+  const handleSyncAll = async () => {
+    setSyncing(true);
     try {
-      const { data: conns } = await supabase
+      let totalInserted = 0;
+
+      // Sync Wise connections
+      const { data: wiseConns } = await supabase
         .from('wise_connections')
         .select('id, account_name');
-      if (!conns || conns.length === 0) {
-        toast.info('No Wise connections configured. Go to Settings to add one.');
-        return;
+      if (wiseConns && wiseConns.length > 0) {
+        for (const conn of wiseConns) {
+          const res = await supabase.functions.invoke('wise-sync', {
+            body: { wise_connection_id: conn.id, days_back: 90 },
+          });
+          if (!res.error && res.data) totalInserted += res.data.inserted || 0;
+        }
       }
-      let totalInserted = 0;
-      for (const conn of conns) {
-        const res = await supabase.functions.invoke('wise-sync', {
-          body: { wise_connection_id: conn.id, days_back: 90 },
-        });
-        if (!res.error && res.data) totalInserted += res.data.inserted || 0;
+
+      // Sync PayPal connections
+      const { data: paypalConns } = await supabase
+        .from('paypal_connections' as any)
+        .select('id, account_name');
+      if (paypalConns && paypalConns.length > 0) {
+        for (const conn of paypalConns as any[]) {
+          const res = await supabase.functions.invoke('paypal-sync', {
+            body: { connection_id: conn.id },
+          });
+          if (!res.error && res.data) totalInserted += res.data.synced || 0;
+        }
       }
-      toast.success(`Wise sync complete: ${totalInserted} new transactions`);
+
+      if (!wiseConns?.length && !paypalConns?.length) {
+        toast.info('No connections configured. Go to Settings to add one.');
+      } else {
+        toast.success(`Sync complete: ${totalInserted} new transactions`);
+      }
       await loadData();
     } catch (err: any) {
-      toast.error(err.message || 'Wise sync failed');
+      toast.error(err.message || 'Sync failed');
     } finally {
-      setWisesyncing(false);
+      setSyncing(false);
     }
   };
 
@@ -97,12 +115,12 @@ const Index: React.FC = () => {
         {/* Action bar */}
         <div className="flex justify-end gap-2 mb-4">
           <button
-            onClick={handleSyncAllWise}
-            disabled={wisesyncing}
+            onClick={handleSyncAll}
+            disabled={syncing}
             className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-foreground border border-border hover:bg-accent rounded-lg transition-colors disabled:opacity-50"
           >
-            {wisesyncing ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
-            Sync Wise
+            {syncing ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
+            Sync All
           </button>
           <button
             onClick={() => setReconcilerOpen(true)}
