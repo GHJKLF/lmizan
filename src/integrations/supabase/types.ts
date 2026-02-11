@@ -77,6 +77,48 @@ export type Database = {
         }
         Relationships: []
       }
+      stripe_connections: {
+        Row: {
+          account_name: string
+          api_key: string
+          created_at: string
+          currency: string | null
+          email: string | null
+          environment: string | null
+          id: string
+          last_synced_at: string | null
+          stripe_account_id: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          account_name?: string
+          api_key: string
+          created_at?: string
+          currency?: string | null
+          email?: string | null
+          environment?: string | null
+          id?: string
+          last_synced_at?: string | null
+          stripe_account_id?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          account_name?: string
+          api_key?: string
+          created_at?: string
+          currency?: string | null
+          email?: string | null
+          environment?: string | null
+          id?: string
+          last_synced_at?: string | null
+          stripe_account_id?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       transactions: {
         Row: {
           account: string | null
@@ -211,6 +253,45 @@ export type Database = {
         }
         Relationships: []
       }
+      stripe_connections_safe: {
+        Row: {
+          account_name: string | null
+          created_at: string | null
+          currency: string | null
+          email: string | null
+          environment: string | null
+          id: string | null
+          last_synced_at: string | null
+          stripe_account_id: string | null
+          updated_at: string | null
+          user_id: string | null
+        }
+        Insert: {
+          account_name?: string | null
+          created_at?: string | null
+          currency?: string | null
+          email?: string | null
+          environment?: string | null
+          id?: string | null
+          last_synced_at?: string | null
+          stripe_account_id?: string | null
+          updated_at?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          account_name?: string | null
+          created_at?: string | null
+          currency?: string | null
+          email?: string | null
+          environment?: string | null
+          id?: string | null
+          last_synced_at?: string | null
+          stripe_account_id?: string | null
+          updated_at?: string | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       wise_connections_safe: {
         Row: {
           account_name: string | null
@@ -260,6 +341,20 @@ export type Database = {
           environment: string
           id: string
           last_synced_at: string
+          user_id: string
+        }[]
+      }
+      get_stripe_connection_with_key: {
+        Args: { p_connection_id: string }
+        Returns: {
+          account_name: string
+          api_key: string
+          currency: string
+          email: string
+          environment: string
+          id: string
+          last_synced_at: string
+          stripe_account_id: string
           user_id: string
         }[]
       }
