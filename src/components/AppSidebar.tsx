@@ -296,7 +296,7 @@ const AppSidebar: React.FC<AppSidebarProps> = ({
           <AlertDialogHeader>
             <AlertDialogTitle>Delete Account</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to delete <strong>{deleteConfirm.accountName}</strong>? This will remove the account from the sidebar. Associated transactions will NOT be deleted.
+              Are you sure you want to delete <strong>{deleteConfirm.accountName}</strong>? This will permanently delete the account AND all its associated transactions. This action cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

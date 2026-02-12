@@ -757,7 +757,7 @@ const Settings: React.FC = () => {
             <AlertDialogHeader>
               <AlertDialogTitle>Delete Account</AlertDialogTitle>
               <AlertDialogDescription>
-                Are you sure you want to delete <strong>{deleteAccountConfirm.name}</strong>? This will remove the account from the sidebar. Associated transactions will NOT be deleted.
+                Are you sure you want to delete <strong>{deleteAccountConfirm.name}</strong>? This will permanently delete the account AND all its associated transactions. This action cannot be undone.
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
@@ -765,9 +765,12 @@ const Settings: React.FC = () => {
               <AlertDialogAction
                 className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                 onClick={async () => {
+                  // First delete all transactions for this account
+                  await supabase.from('transactions').delete().eq('account', deleteAccountConfirm.name);
+                  // Then delete the account row
                   const { error } = await supabase.from('accounts').delete().eq('id', deleteAccountConfirm.id);
                   if (error) toast.error('Failed to delete account');
-                  else { toast.success(`Account "${deleteAccountConfirm.name}" deleted`); await loadData(); }
+                  else { toast.success(`Account "${deleteAccountConfirm.name}" and its transactions deleted`); await loadData(); }
                   setDeleteAccountConfirm({ open: false, id: 0, name: '' });
                 }}
               >

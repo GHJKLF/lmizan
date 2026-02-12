@@ -112,13 +112,16 @@ const Index: React.FC = () => {
   };
 
   const handleDeleteAccount = async (accountName: string) => {
+    // First delete all transactions for this account
+    await supabase.from('transactions').delete().eq('account', accountName);
+    // Then delete the account row
     const { data } = await supabase.from('accounts').select('id, name').eq('name', accountName).limit(1);
     if (data && data.length > 0) {
       const { error } = await supabase.from('accounts').delete().eq('id', data[0].id);
       if (error) {
         toast.error('Failed to delete account');
       } else {
-        toast.success(`Account "${accountName}" deleted`);
+        toast.success(`Account "${accountName}" and its transactions deleted`);
         await loadData();
       }
     }
