@@ -15,11 +15,6 @@ function fromStripeAmount(amount: number, currency: string): number {
 }
 
 function mapType(txType: string, net: number): string {
-  const inflowTypes = new Set(["charge", "payment", "payment_refund_reversal", "transfer", "payout_cancel"]);
-  const outflowTypes = new Set(["payout", "refund", "dispute", "payment_failure_refund", "payout_failure"]);
-
-  if (inflowTypes.has(txType)) return "Inflow";
-  if (outflowTypes.has(txType)) return "Outflow";
   return net >= 0 ? "Inflow" : "Outflow";
 }
 
