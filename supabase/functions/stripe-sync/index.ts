@@ -81,21 +81,26 @@ Deno.serve(async (req) => {
     };
 
     // Fetch existing dedup keys upfront
-    const { data: existingTxs } = await supabaseAdmin
-      .from("transactions")
-      .select("notes")
-      .eq("account", conn.account_name)
-      .eq("user_id", conn.user_id)
-      .limit(100000);
-
-    const existingIds = new Set(
-      (existingTxs || [])
-        .map((t: any) => {
-          const match = (t.notes || "").match(/stripe_bt:([^\s|]+)/);
-          return match ? match[1] : null;
-        })
-        .filter(Boolean)
-    );
+    // Paginate to load ALL existing dedup keys (PostgREST caps single queries)
+    const existingIds = new Set<string>();
+    let dedupOffset = 0;
+    const DEDUP_PAGE = 1000;
+    while (true) {
+      const { data: batch } = await supabaseAdmin
+        .from("transactions")
+        .select("notes")
+        .eq("account", conn.account_name)
+        .eq("user_id", conn.user_id)
+        .range(dedupOffset, dedupOffset + DEDUP_PAGE - 1)
+        .order("id", { ascending: true });
+      if (!batch || batch.length === 0) break;
+      batch.forEach((t: any) => {
+        const match = (t.notes || "").match(/stripe_bt:([^\s|]+)/);
+        if (match) existingIds.add(match[1]);
+      });
+      dedupOffset += batch.length;
+      if (batch.length < DEDUP_PAGE) break;
+    }
 
     // Incremental sync: use last_synced_at to only fetch new transactions
     const lastSyncedAt = conn.last_synced_at;
