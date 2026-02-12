@@ -24,26 +24,49 @@ async function getPayPalToken(clientId: string, clientSecret: string, env: strin
   return data.access_token;
 }
 
+async function delay(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 async function fetchTransactionPage(
   base: string,
   token: string,
   startDate: string,
   endDate: string,
   page: number
-): Promise<{ transactions: any[]; totalPages: number }> {
+): Promise<{ transactions: any[]; totalPages: number } | "skip"> {
   const url = `${base}/v1/reporting/transactions?start_date=${encodeURIComponent(startDate)}&end_date=${encodeURIComponent(endDate)}&fields=all&page_size=500&page=${page}`;
-  const res = await fetch(url, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  if (!res.ok) {
-    const errText = await res.text();
-    throw new Error(`PayPal Transactions API error [${res.status}]: ${errText}`);
+
+  const MAX_RETRIES = 5;
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    const res = await fetch(url, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+
+    if (res.status === 429) {
+      const wait = 1000 * Math.pow(2, attempt);
+      console.warn(`Rate limited. Retrying in ${wait}ms (attempt ${attempt + 1}/${MAX_RETRIES})`);
+      await delay(wait);
+      continue;
+    }
+
+    if (res.status === 404) {
+      console.warn(`No data for range ${startDate} - ${endDate}, skipping.`);
+      return "skip";
+    }
+
+    if (!res.ok) {
+      const errText = await res.text();
+      throw new Error(`PayPal Transactions API error [${res.status}]: ${errText}`);
+    }
+
+    const data = await res.json();
+    return {
+      transactions: data.transaction_details || [],
+      totalPages: data.total_pages || 1,
+    };
   }
-  const data = await res.json();
-  return {
-    transactions: data.transaction_details || [],
-    totalPages: data.total_pages || 1,
-  };
+  throw new Error("PayPal API rate limit exceeded after max retries");
 }
 
 Deno.serve(async (req) => {
@@ -127,10 +150,13 @@ Deno.serve(async (req) => {
       let page = 1;
       while (true) {
         const result = await fetchTransactionPage(base, token, chunk.start, chunk.end, page);
+        if (result === "skip") break;
         allTxDetails.push(...result.transactions);
         if (page >= result.totalPages) break;
         page++;
+        await delay(500); // pace between pages
       }
+      await delay(300); // pace between chunks
     }
 
     if (allTxDetails.length === 0) {
