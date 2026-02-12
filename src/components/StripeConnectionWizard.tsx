@@ -105,6 +105,14 @@ const StripeConnectionWizard: React.FC<Props> = ({ isOpen, onClose, onSuccess })
 
       toast.success('Stripe account connected! Syncing transactions...');
 
+      // Upsert into accounts table for data hygiene
+      try {
+        await supabase.from('accounts').upsert(
+          { name: accountName.trim() || 'Stripe', user_id: user.id } as any,
+          { onConflict: 'name,user_id' }
+        );
+      } catch {}
+
       if (inserted) {
         supabase.functions.invoke('stripe-sync', {
           body: { connection_id: (inserted as any).id },

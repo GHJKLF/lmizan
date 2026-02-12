@@ -218,6 +218,14 @@ const WiseConnectionWizard: React.FC<Props> = ({ open, onOpenChange, onComplete 
           });
         }
 
+        // Upsert into accounts table for data hygiene
+        try {
+          await supabase.from('accounts').upsert(
+            { name: `Wise ${sel.profileName}`, user_id: user.id } as any,
+            { onConflict: 'name,user_id' }
+          );
+        } catch {}
+
         updatedResults[i] = { ...updatedResults[i], status: 'done' };
       } catch (err: any) {
         updatedResults[i] = {
