@@ -127,7 +127,7 @@ Deno.serve(async (req) => {
 
     // Helper: dedup, filter, insert a page of Stripe balance_transactions
     async function insertPage(pageTxs: any[]): Promise<number> {
-      const filtered = pageTxs.filter((bt: any) => bt.type !== "stripe_fee");
+      const filtered = pageTxs;
       const mapped = filtered.map(mapBt);
       const newTxs = mapped.filter((t: any) => t._stripe_id && !existingIds.has(t._stripe_id));
       let inserted = 0;
@@ -160,7 +160,7 @@ Deno.serve(async (req) => {
     let totalFetched = 0;
     let totalInserted = 0;
     let isFirstPage = true;
-    let consecutiveDupPages = 0;
+    
 
     while (hasMore) {
       let url = "https://api.stripe.com/v1/balance_transactions?limit=100";
@@ -200,16 +200,6 @@ Deno.serve(async (req) => {
         isFirstPage = false;
       }
 
-      // Early termination: 3 consecutive all-duplicate pages → skip to backfill
-      if (pageInserted === 0) {
-        consecutiveDupPages++;
-        if (consecutiveDupPages >= 3) {
-          console.log("3 consecutive duplicate pages in forward sync, moving to backfill");
-          break;
-        }
-      } else {
-        consecutiveDupPages = 0;
-      }
     }
 
     // If no transactions were fetched at all, still update last_synced_at
