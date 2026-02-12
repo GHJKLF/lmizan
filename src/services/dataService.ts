@@ -55,10 +55,12 @@ export const DataService = {
     let totalCount: number | null = null;
 
     while (true) {
-      const query = supabase
-        .from('transactions')
-        .select('*', from === 0 ? { count: 'exact' } : { count: undefined as any })
-        .range(from, from + batchSize - 1);
+      let query;
+      if (from === 0) {
+        query = supabase.from('transactions').select('*', { count: 'exact' }).range(from, from + batchSize - 1);
+      } else {
+        query = supabase.from('transactions').select('*').range(from, from + batchSize - 1);
+      }
 
       const { data, error, count } = await query;
 
