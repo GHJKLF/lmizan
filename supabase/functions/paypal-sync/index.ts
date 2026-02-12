@@ -109,13 +109,13 @@ Deno.serve(async (req) => {
       ? new Date(conn.last_synced_at).toISOString()
       : safeStart.toISOString();
 
-    // Build 31-day chunks
+    // Build 7-day chunks to stay under PayPal's 10,000 item limit
     const chunks: { start: string; end: string }[] = [];
     let chunkStart = new Date(intervalStart);
     const endDate = new Date(intervalEnd);
     while (chunkStart < endDate) {
       const chunkEnd = new Date(chunkStart);
-      chunkEnd.setDate(chunkEnd.getDate() + 31);
+      chunkEnd.setDate(chunkEnd.getDate() + 7);
       if (chunkEnd > endDate) chunkEnd.setTime(endDate.getTime());
       chunks.push({ start: chunkStart.toISOString(), end: chunkEnd.toISOString() });
       chunkStart = new Date(chunkEnd);
