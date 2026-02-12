@@ -1,33 +1,24 @@
 
 
-## Fix `mapType` function in stripe-sync
+## Fix stripe-sync: Include fees and remove early termination
 
-**Problem**: The `mapType` function uses hardcoded Sets of Stripe transaction type names to determine Inflow/Outflow direction. This fails for transaction types that can go either way (e.g., payout reversals have type "payout" but positive net).
+Two targeted changes to `supabase/functions/stripe-sync/index.ts` to fix missing transactions and incorrect balances.
 
-**Fix**: Replace the function body to use only the `net` amount sign, which is always the correct indicator from Stripe's API.
+### Change 1: Stop filtering out `stripe_fee` transactions (line 130)
 
-### Technical Details
+Stripe fee transactions affect the real balance and must be recorded. Currently they are silently dropped, causing the dashboard balance to diverge from Stripe's actual balance.
 
-**File**: `supabase/functions/stripe-sync/index.ts` (lines 23-30)
+**Before:** `const filtered = pageTxs.filter((bt: any) => bt.type !== "stripe_fee");`
+**After:** `const filtered = pageTxs;`
 
-**Before**:
-```typescript
-function mapType(txType: string, net: number): string {
-  const inflowTypes = new Set(["charge", "payment", "payment_refund_reversal", "transfer", "payout_cancel"]);
-  const outflowTypes = new Set(["payout", "refund", "dispute", "payment_failure_refund", "payout_failure"]);
+### Change 2: Remove early termination logic (lines 163, 203-212)
 
-  if (inflowTypes.has(txType)) return "Inflow";
-  if (outflowTypes.has(txType)) return "Outflow";
-  return net >= 0 ? "Inflow" : "Outflow";
-}
-```
+The "3 consecutive duplicate pages" shortcut causes the forward sync to stop before reaching all transactions. The sync should rely solely on Stripe's `has_more` flag.
 
-**After**:
-```typescript
-function mapType(txType: string, net: number): string {
-  return net >= 0 ? "Inflow" : "Outflow";
-}
-```
+**Remove:**
+- Line 163: `let consecutiveDupPages = 0;`
+- Lines 203-212: The entire `if/else` block checking `consecutiveDupPages >= 3`
 
-One-line body change. No other modifications to the file.
+### After changes
 
+Redeploy the `stripe-sync` edge function so the fixes take effect immediately.
