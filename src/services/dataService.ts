@@ -51,29 +51,33 @@ export const DataService = {
   async fetchTransactions(): Promise<Transaction[]> {
     let allRows: any[] = [];
     let from = 0;
-    const batchSize = 1000;
-    let done = false;
+    const batchSize = 5000;
+    let totalCount: number | null = null;
 
-    while (!done) {
-      const { data, error } = await supabase
+    while (true) {
+      const query = supabase
         .from('transactions')
-        .select('*')
+        .select('*', from === 0 ? { count: 'exact' } : { count: undefined as any })
         .range(from, from + batchSize - 1);
+
+      const { data, error, count } = await query;
 
       if (error) {
         console.error('Error fetching transactions batch:', error);
         break;
       }
 
-      if (!data || data.length === 0) {
-        done = true;
-      } else {
-        allRows = allRows.concat(data);
-        from += batchSize;
-        if (data.length < batchSize) done = true;
+      if (from === 0 && count != null) {
+        totalCount = count;
       }
 
-      if (from > 100000) done = true;
+      if (!data || data.length === 0) break;
+
+      allRows = allRows.concat(data);
+      from += batchSize;
+
+      if (totalCount != null && allRows.length >= totalCount) break;
+      if (data.length < batchSize) break;
     }
 
     return allRows.map((row: any) => ({

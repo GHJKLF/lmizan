@@ -8,7 +8,7 @@ interface Props {
   snapshot: LiquiditySnapshot;
 }
 
-const LiquidityHeader: React.FC<Props> = ({ snapshot }) => {
+const LiquidityHeader: React.FC<Props> = React.memo(({ snapshot }) => {
   const cards = [
     {
       title: 'Total Liquid Cash',
@@ -60,6 +60,6 @@ const LiquidityHeader: React.FC<Props> = ({ snapshot }) => {
       ))}
     </div>
   );
-};
+});
 
 export default LiquidityHeader;
