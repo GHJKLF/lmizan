@@ -85,7 +85,8 @@ Deno.serve(async (req) => {
       .from("transactions")
       .select("notes")
       .eq("account", conn.account_name)
-      .eq("user_id", conn.user_id);
+      .eq("user_id", conn.user_id)
+      .limit(100000);
 
     const existingIds = new Set(
       (existingTxs || [])
