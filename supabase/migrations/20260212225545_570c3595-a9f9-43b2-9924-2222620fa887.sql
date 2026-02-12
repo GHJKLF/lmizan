@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX accounts_name_user_id_unique ON public.accounts (name, user_id);

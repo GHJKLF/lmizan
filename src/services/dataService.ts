@@ -94,9 +94,17 @@ export const DataService = {
   },
 
   async fetchAccounts(): Promise<string[]> {
-    const { data, error } = await supabase.from('accounts').select('name');
-    if (error || !data) return [];
-    return data.map((r: any) => r.name as string).filter(Boolean).sort();
+    const { data, error } = await supabase
+      .from('transactions')
+      .select('account');
+    if (error || !data) {
+      console.error('Error fetching accounts from transactions:', error);
+      return [];
+    }
+    const unique = [...new Set(
+      data.map((r: any) => r.account as string).filter(Boolean)
+    )].sort();
+    return unique;
   },
 
   getAccountMappings(): Record<string, string> {
