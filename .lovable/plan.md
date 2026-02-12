@@ -1,24 +1,64 @@
 
 
-## Fix stripe-sync: Include fees and remove early termination
+## Optimize Dashboard Performance
 
-Two targeted changes to `supabase/functions/stripe-sync/index.ts` to fix missing transactions and incorrect balances.
+Four targeted changes to reduce load time and unnecessary computation.
 
-### Change 1: Stop filtering out `stripe_fee` transactions (line 130)
+### 1. Conditional rendering instead of display:none
 
-Stripe fee transactions affect the real balance and must be recorded. Currently they are silently dropped, causing the dashboard balance to diverge from Stripe's actual balance.
+**File:** `src/pages/Index.tsx` (lines ~178-200)
 
-**Before:** `const filtered = pageTxs.filter((bt: any) => bt.type !== "stripe_fee");`
-**After:** `const filtered = pageTxs;`
+Replace the three `<div style={{ display: ... }}>` wrappers with conditional rendering using `&&`. This prevents inactive views (and their charts, computations) from running in the background.
 
-### Change 2: Remove early termination logic (lines 163, 203-212)
+```
+Before: <div style={{ display: currentView === 'DASHBOARD' ? 'block' : 'none' }}>
+After:  {currentView === 'DASHBOARD' && (<Dashboard ... />)}
+```
 
-The "3 consecutive duplicate pages" shortcut causes the forward sync to stop before reaching all transactions. The sync should rely solely on Stripe's `has_more` flag.
+Same pattern for TRANSACTIONS and AI_INSIGHTS views.
 
-**Remove:**
-- Line 163: `let consecutiveDupPages = 0;`
-- Lines 203-212: The entire `if/else` block checking `consecutiveDupPages >= 3`
+### 2. Wrap chart components with React.memo()
 
-### After changes
+**Files:** 5 dashboard components
 
-Redeploy the `stripe-sync` edge function so the fixes take effect immediately.
+- `src/components/dashboard/LiquidityHeader.tsx`
+- `src/components/dashboard/CashFlowWaterfall.tsx`
+- `src/components/dashboard/EquityTrendChart.tsx`
+- `src/components/dashboard/AccountBreakdown.tsx`
+- `src/components/dashboard/AccountDashboard.tsx`
+
+Change the component definition pattern from:
+```typescript
+const ComponentName: React.FC<Props> = (props) => {
+```
+to:
+```typescript
+const ComponentName: React.FC<Props> = React.memo((props) => {
+```
+And close with `})` instead of `}`.
+
+This prevents re-renders when parent state changes but props haven't changed.
+
+### 3. Faster transaction fetching
+
+**File:** `src/services/dataService.ts` (lines 51-77)
+
+- Increase `batchSize` from 1000 to 5000
+- On the first request, use `select('*', { count: 'exact' })` to get total count
+- Use that count to determine when all rows are fetched, instead of probing with empty responses
+
+### 4. Avoid redundant filtering in AccountDashboard
+
+**File:** `src/components/dashboard/AccountDashboard.tsx` (lines ~37-38)
+
+Pass the already-filtered `accountTxs` directly to `computeMonthlyFlows()` and `computeCategoryBreakdown()` without the account parameter, since both functions accept an optional account and filter internally. This avoids filtering the full transaction array twice.
+
+```typescript
+// Before
+const monthlyFlows = useMemo(() => computeMonthlyFlows(transactions, account), [transactions, account]);
+const categoryBreakdown = useMemo(() => computeCategoryBreakdown(transactions, account), [transactions, account]);
+
+// After
+const monthlyFlows = useMemo(() => computeMonthlyFlows(accountTxs), [accountTxs]);
+const categoryBreakdown = useMemo(() => computeCategoryBreakdown(accountTxs), [accountTxs]);
+```
