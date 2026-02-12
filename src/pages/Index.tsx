@@ -111,6 +111,19 @@ const Index: React.FC = () => {
     await loadData();
   };
 
+  const handleDeleteAccount = async (accountName: string) => {
+    const { data } = await supabase.from('accounts').select('id, name').eq('name', accountName).limit(1);
+    if (data && data.length > 0) {
+      const { error } = await supabase.from('accounts').delete().eq('id', data[0].id);
+      if (error) {
+        toast.error('Failed to delete account');
+      } else {
+        toast.success(`Account "${accountName}" deleted`);
+        await loadData();
+      }
+    }
+  };
+
   return (
     <div className="flex min-h-screen bg-background">
       <AppSidebar
@@ -120,6 +133,7 @@ const Index: React.FC = () => {
         onSelectAccount={setSelectedAccount}
         accounts={accounts}
         onRenameAccount={handleRenameAccount}
+        onDeleteAccount={handleDeleteAccount}
         onLogout={async () => { await supabase.auth.signOut(); navigate('/login'); }}
         onOpenSettings={() => navigate('/settings')}
       />

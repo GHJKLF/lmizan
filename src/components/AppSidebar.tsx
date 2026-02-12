@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useRef, useEffect } from 'react';
 import {
   LayoutDashboard,
   Receipt,
@@ -15,8 +15,19 @@ import {
   PieChart,
   Pencil,
   X,
+  Trash2,
 } from 'lucide-react';
 import { ViewState } from '@/types';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 
 interface AppSidebarProps {
   currentView: ViewState;
@@ -25,6 +36,7 @@ interface AppSidebarProps {
   onSelectAccount: (account: string | 'ALL') => void;
   accounts: string[];
   onRenameAccount: (oldName: string, newName: string) => void;
+  onDeleteAccount: (accountName: string) => void;
   onLogout: () => void;
   onOpenSettings: () => void;
 }
@@ -59,6 +71,7 @@ const AppSidebar: React.FC<AppSidebarProps> = ({
   onSelectAccount,
   accounts,
   onRenameAccount,
+  onDeleteAccount,
   onLogout,
   onOpenSettings,
 }) => {
@@ -74,6 +87,25 @@ const AppSidebar: React.FC<AppSidebarProps> = ({
     oldName: '',
     newName: '',
   });
+
+  const [deleteConfirm, setDeleteConfirm] = useState<{ open: boolean; accountName: string }>({
+    open: false,
+    accountName: '',
+  });
+
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; account: string } | null>(null);
+  const contextMenuRef = useRef<HTMLDivElement>(null);
+
+  // Close context menu on outside click
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (contextMenuRef.current && !contextMenuRef.current.contains(e.target as Node)) {
+        setContextMenu(null);
+      }
+    };
+    if (contextMenu) document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [contextMenu]);
 
   const navItemClass = (isActive: boolean) =>
     `flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 cursor-pointer font-medium text-sm ${
@@ -184,6 +216,10 @@ const AppSidebar: React.FC<AppSidebarProps> = ({
                           <div
                             key={account}
                             onClick={() => onSelectAccount(account)}
+                            onContextMenu={(e) => {
+                              e.preventDefault();
+                              setContextMenu({ x: e.clientX, y: e.clientY, account });
+                            }}
                             className={`group flex items-center justify-between px-3 py-2 rounded-md text-sm cursor-pointer transition-all ${
                               selectedAccount === account
                                 ? 'bg-accent text-foreground font-medium translate-x-1'
@@ -233,6 +269,50 @@ const AppSidebar: React.FC<AppSidebarProps> = ({
           </div>
         </div>
       </aside>
+
+      {/* Context Menu */}
+      {contextMenu && (
+        <div
+          ref={contextMenuRef}
+          className="fixed z-50 bg-card border border-border rounded-lg shadow-xl py-1 min-w-[160px]"
+          style={{ left: contextMenu.x, top: contextMenu.y }}
+        >
+          <button
+            onClick={() => {
+              setDeleteConfirm({ open: true, accountName: contextMenu.account });
+              setContextMenu(null);
+            }}
+            className="flex items-center gap-2 w-full px-3 py-2 text-sm text-destructive hover:bg-destructive/10 transition-colors"
+          >
+            <Trash2 size={14} />
+            Delete Account
+          </button>
+        </div>
+      )}
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={deleteConfirm.open} onOpenChange={(open) => !open && setDeleteConfirm({ open: false, accountName: '' })}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Account</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete <strong>{deleteConfirm.accountName}</strong>? This will remove the account from the sidebar. Associated transactions will NOT be deleted.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => {
+                onDeleteAccount(deleteConfirm.accountName);
+                setDeleteConfirm({ open: false, accountName: '' });
+              }}
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Rename Modal */}
       {renameModal.open && (
