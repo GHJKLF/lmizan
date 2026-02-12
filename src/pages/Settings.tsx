@@ -13,7 +13,18 @@ import {
   ChevronDown,
   CreditCard,
   Zap,
+  Database,
 } from 'lucide-react';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import {
   Popover,
   PopoverContent,
@@ -95,11 +106,13 @@ const Settings: React.FC = () => {
   const [stripeSyncingId, setStripeSyncingId] = useState<string | null>(null);
   const [stripeBalancesLoading, setStripeBalancesLoading] = useState<string | null>(null);
   const [stripeBalancesData, setStripeBalancesData] = useState<{ connId: string; balances: StripeBalance[] } | null>(null);
+  const [accounts, setAccounts] = useState<{ id: number; name: string; created_at: string }[]>([]);
+  const [deleteAccountConfirm, setDeleteAccountConfirm] = useState<{ open: boolean; id: number; name: string }>({ open: false, id: 0, name: '' });
 
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      const [wiseRes, paypalRes, stripeRes] = await Promise.all([
+      const [wiseRes, paypalRes, stripeRes, accountsRes] = await Promise.all([
         supabase
           .from('wise_connections_safe' as any)
           .select('id, account_name, profile_id, balance_id, currency, last_synced_at, created_at')
@@ -112,10 +125,15 @@ const Settings: React.FC = () => {
           .from('stripe_connections_safe' as any)
           .select('id, account_name, stripe_account_id, email, currency, environment, last_synced_at, created_at')
           .order('created_at', { ascending: false }),
+        supabase
+          .from('accounts')
+          .select('id, name, created_at')
+          .order('name', { ascending: true }),
       ]);
       setConnections((wiseRes.data as unknown as WiseConnection[]) || []);
       setPaypalConnections((paypalRes.data as unknown as PayPalConnection[]) || []);
       setStripeConnections((stripeRes.data as unknown as StripeConnection[]) || []);
+      setAccounts((accountsRes.data as any[]) || []);
     } catch (e) {
       console.error(e);
     } finally {
@@ -687,6 +705,77 @@ const Settings: React.FC = () => {
             </div>
           )}
         </section>
+
+        {/* Accounts Management */}
+        <section className="mb-10">
+          <div className="mb-4">
+            <h2 className="text-lg font-bold text-foreground flex items-center gap-2">
+              <Database size={18} className="text-muted-foreground" />
+              Accounts
+            </h2>
+            <p className="text-sm text-muted-foreground mt-0.5">Manage sidebar accounts</p>
+          </div>
+
+          {loading ? (
+            <div className="flex justify-center py-12">
+              <Loader2 className="animate-spin text-muted-foreground" size={24} />
+            </div>
+          ) : accounts.length === 0 ? (
+            <div className="text-center py-12 text-muted-foreground border border-dashed border-border rounded-xl">
+              <Database size={32} className="mx-auto mb-3 opacity-40" />
+              <p className="text-sm">No accounts found.</p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {accounts.map((acc) => (
+                <div
+                  key={acc.id}
+                  className="flex items-center justify-between p-3 bg-card border border-border rounded-xl"
+                >
+                  <div>
+                    <span className="font-medium text-foreground text-sm">{acc.name}</span>
+                    <p className="text-xs text-muted-foreground">
+                      Added: {acc.created_at ? new Date(acc.created_at).toLocaleDateString() : 'Unknown'}
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => setDeleteAccountConfirm({ open: true, id: acc.id, name: acc.name })}
+                    className="p-2 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-lg transition-colors"
+                    title="Delete account"
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+
+        {/* Delete Account Confirmation */}
+        <AlertDialog open={deleteAccountConfirm.open} onOpenChange={(open) => !open && setDeleteAccountConfirm({ open: false, id: 0, name: '' })}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Delete Account</AlertDialogTitle>
+              <AlertDialogDescription>
+                Are you sure you want to delete <strong>{deleteAccountConfirm.name}</strong>? This will remove the account from the sidebar. Associated transactions will NOT be deleted.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                onClick={async () => {
+                  const { error } = await supabase.from('accounts').delete().eq('id', deleteAccountConfirm.id);
+                  if (error) toast.error('Failed to delete account');
+                  else { toast.success(`Account "${deleteAccountConfirm.name}" deleted`); await loadData(); }
+                  setDeleteAccountConfirm({ open: false, id: 0, name: '' });
+                }}
+              >
+                Delete
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
 
         <WiseConnectionWizard
           open={wizardOpen}
