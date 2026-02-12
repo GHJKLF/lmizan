@@ -16,11 +16,10 @@ function fromStripeAmount(amount: number, currency: string): number {
 
 function mapType(txType: string, net: number): string {
   const inflowTypes = new Set(["charge", "payment", "payment_refund_reversal", "transfer", "payout_cancel"]);
-  const outflowTypes = new Set(["payout", "refund", "stripe_fee", "dispute", "payment_failure_refund", "payout_failure"]);
+  const outflowTypes = new Set(["payout", "refund", "dispute", "payment_failure_refund", "payout_failure"]);
 
   if (inflowTypes.has(txType)) return "Inflow";
   if (outflowTypes.has(txType)) return "Outflow";
-  // For adjustment, application_fee, etc. — use sign
   return net >= 0 ? "Inflow" : "Outflow";
 }
 
@@ -81,43 +80,7 @@ Deno.serve(async (req) => {
       "Content-Type": "application/x-www-form-urlencoded",
     };
 
-    // Paginate through all balance transactions
-    const allTxs: any[] = [];
-    let startingAfter: string | null = null;
-    let hasMore = true;
-
-    while (hasMore) {
-      let url = "https://api.stripe.com/v1/balance_transactions?limit=100";
-      if (startingAfter) url += `&starting_after=${startingAfter}`;
-
-      const res = await fetch(url, { headers: stripeHeaders });
-      if (!res.ok) {
-        const errText = await res.text();
-        throw new Error(`Stripe API error [${res.status}]: ${errText}`);
-      }
-
-      const data = await res.json();
-      allTxs.push(...(data.data || []));
-      hasMore = data.has_more || false;
-      if (data.data?.length > 0) {
-        startingAfter = data.data[data.data.length - 1].id;
-      } else {
-        hasMore = false;
-      }
-    }
-
-    if (allTxs.length === 0) {
-      await supabaseAdmin
-        .from("stripe_connections")
-        .update({ last_synced_at: new Date().toISOString() })
-        .eq("id", connection_id);
-      return new Response(
-        JSON.stringify({ synced: 0, total_fetched: 0 }),
-        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    // Fetch existing dedup keys
+    // Fetch existing dedup keys upfront
     const { data: existingTxs } = await supabaseAdmin
       .from("transactions")
       .select("notes")
@@ -133,59 +96,119 @@ Deno.serve(async (req) => {
         .filter(Boolean)
     );
 
-    // Map transactions
-    const mapped = allTxs.map((bt: any) => {
-      const currency = (bt.currency || "usd").toUpperCase();
-      const netAmount = fromStripeAmount(bt.net || 0, currency);
-      const grossAmount = fromStripeAmount(bt.amount || 0, currency);
-      const feeAmount = fromStripeAmount(bt.fee || 0, currency);
-      const type = mapType(bt.type || "", netAmount);
-      const amount = Math.abs(netAmount);
-      const date = new Date((bt.created || 0) * 1000).toISOString().split("T")[0];
-      const description = bt.description || bt.type || "Stripe Transaction";
+    // Incremental sync: use last_synced_at to only fetch new transactions
+    const lastSyncedAt = conn.last_synced_at;
+    let startingAfter: string | null = null;
+    let hasMore = true;
+    let totalFetched = 0;
+    let totalInserted = 0;
 
-      const feePart = feeAmount !== 0 ? ` | Fee: -${feeAmount.toFixed(2)} ${currency}` : "";
-      const grossPart = grossAmount !== netAmount ? ` | Gross: ${grossAmount.toFixed(2)} ${currency}` : "";
+    while (hasMore) {
+      let url = "https://api.stripe.com/v1/balance_transactions?limit=100";
+      if (lastSyncedAt) {
+        const gte = Math.floor(new Date(lastSyncedAt).getTime() / 1000);
+        url += `&created[gte]=${gte}`;
+      }
+      if (startingAfter) url += `&starting_after=${startingAfter}`;
 
-      return {
-        id: crypto.randomUUID(),
-        date,
-        amount,
-        currency,
-        description,
-        type,
-        account: conn.account_name,
-        category: "Uncategorized",
-        notes: `stripe_bt:${bt.id}${feePart}${grossPart}`,
-        running_balance: null,
-        user_id: conn.user_id,
-        _stripe_id: bt.id,
-      };
-    });
+      const res = await fetch(url, { headers: stripeHeaders });
+      if (!res.ok) {
+        const errText = await res.text();
+        throw new Error(`Stripe API error [${res.status}]: ${errText}`);
+      }
 
-    const newTxs = mapped.filter((t: any) => t._stripe_id && !existingIds.has(t._stripe_id));
+      const data = await res.json();
+      const pageTxs: any[] = data.data || [];
+      hasMore = data.has_more || false;
 
-    let inserted = 0;
-    if (newTxs.length > 0) {
-      const payloads = newTxs.map(({ _stripe_id, ...rest }: any) => rest);
-      const CHUNK = 500;
-      for (let i = 0; i < payloads.length; i += CHUNK) {
-        const chunk = payloads.slice(i, i + CHUNK);
-        const { error: insertErr } = await supabaseAdmin
-          .from("transactions")
-          .insert(chunk);
-        if (!insertErr) inserted += chunk.length;
-        else console.error("Insert error:", insertErr);
+      if (pageTxs.length > 0) {
+        startingAfter = pageTxs[pageTxs.length - 1].id;
+      } else {
+        hasMore = false;
+        break;
+      }
+
+      // Bug 1 fix: skip stripe_fee entries — fees already reflected in net
+      const filtered = pageTxs.filter((bt: any) => bt.type !== "stripe_fee");
+      totalFetched += pageTxs.length;
+
+      // Map transactions for this page
+      const mapped = filtered.map((bt: any) => {
+        const currency = (bt.currency || "usd").toUpperCase();
+        const netAmount = fromStripeAmount(bt.net || 0, currency);
+        const grossAmount = fromStripeAmount(bt.amount || 0, currency);
+        const feeAmount = fromStripeAmount(bt.fee || 0, currency);
+        const type = mapType(bt.type || "", netAmount);
+        const amount = Math.abs(netAmount);
+        const date = new Date((bt.created || 0) * 1000).toISOString().split("T")[0];
+        const description = bt.description || bt.type || "Stripe Transaction";
+
+        const feePart = feeAmount !== 0 ? ` | Fee: -${feeAmount.toFixed(2)} ${currency}` : "";
+        const grossPart = grossAmount !== netAmount ? ` | Gross: ${grossAmount.toFixed(2)} ${currency}` : "";
+
+        return {
+          id: crypto.randomUUID(),
+          date,
+          amount,
+          currency,
+          description,
+          type,
+          account: conn.account_name,
+          category: "Uncategorized",
+          notes: `stripe_bt:${bt.id}${feePart}${grossPart}`,
+          running_balance: null,
+          user_id: conn.user_id,
+          _stripe_id: bt.id,
+        };
+      });
+
+      // Filter duplicates
+      const newTxs = mapped.filter((t: any) => t._stripe_id && !existingIds.has(t._stripe_id));
+
+      // Insert this page's transactions
+      if (newTxs.length > 0) {
+        const payloads = newTxs.map(({ _stripe_id, ...rest }: any) => rest);
+        const CHUNK = 500;
+        for (let i = 0; i < payloads.length; i += CHUNK) {
+          const chunk = payloads.slice(i, i + CHUNK);
+          const { error: insertErr } = await supabaseAdmin
+            .from("transactions")
+            .insert(chunk);
+          if (!insertErr) {
+            totalInserted += chunk.length;
+            // Add to dedup set so subsequent pages don't re-insert
+            chunk.forEach((t: any) => {
+              const match = (t.notes || "").match(/stripe_bt:([^\s|]+)/);
+              if (match) existingIds.add(match[1]);
+            });
+          } else {
+            console.error("Insert error:", insertErr);
+          }
+        }
+      }
+
+      // Bug 3 fix: update last_synced_at after each page
+      // Use the newest transaction's created timestamp from this page
+      const newestCreated = pageTxs[0]?.created; // Stripe returns newest first
+      if (newestCreated) {
+        const syncTs = new Date(newestCreated * 1000).toISOString();
+        await supabaseAdmin
+          .from("stripe_connections")
+          .update({ last_synced_at: syncTs })
+          .eq("id", connection_id);
       }
     }
 
-    await supabaseAdmin
-      .from("stripe_connections")
-      .update({ last_synced_at: new Date().toISOString() })
-      .eq("id", connection_id);
+    // If no transactions were fetched at all, still update last_synced_at
+    if (totalFetched === 0) {
+      await supabaseAdmin
+        .from("stripe_connections")
+        .update({ last_synced_at: new Date().toISOString() })
+        .eq("id", connection_id);
+    }
 
     return new Response(
-      JSON.stringify({ synced: inserted, total_fetched: allTxs.length }),
+      JSON.stringify({ synced: totalInserted, total_fetched: totalFetched }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (err) {
