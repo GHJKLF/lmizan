@@ -51,7 +51,7 @@ export const DataService = {
   async fetchTransactions(): Promise<Transaction[]> {
     let allRows: any[] = [];
     let from = 0;
-    const batchSize = 5000;
+    const batchSize = 1000;
 
     while (true) {
       const { data, error } = await supabase
