@@ -79,7 +79,7 @@ Deno.serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
-    const { connection_id } = await req.json();
+    const { connection_id, full_sync } = await req.json();
     if (!connection_id) {
       return new Response(
         JSON.stringify({ error: "connection_id is required" }),
@@ -104,10 +104,11 @@ Deno.serve(async (req) => {
 
     const now = new Date();
     const intervalEnd = now.toISOString();
-    const safeStart = new Date(Date.now() - (2 * 365 + 335) * 24 * 60 * 60 * 1000);
-    const intervalStart = conn.last_synced_at
-      ? new Date(conn.last_synced_at).toISOString()
-      : safeStart.toISOString();
+    const intervalStart = full_sync
+      ? new Date(Date.now() - (2 * 365 + 335) * 24 * 60 * 60 * 1000).toISOString()
+      : conn.last_synced_at
+        ? new Date(conn.last_synced_at).toISOString()
+        : new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString();
 
     // Build 31-day chunks
     const chunks: { start: string; end: string }[] = [];

@@ -51,7 +51,7 @@ Deno.serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
-    const { connection_id } = await req.json();
+    const { connection_id, full_sync } = await req.json();
     if (!connection_id) {
       return new Response(
         JSON.stringify({ error: "connection_id is required" }),
@@ -154,7 +154,8 @@ Deno.serve(async (req) => {
     }
 
     // ── PHASE 1: Forward sync (new transactions) ──
-    const lastSyncedAt = conn.last_synced_at;
+    const lastSyncedAt = full_sync ? null : conn.last_synced_at;
+    const effectiveLastSynced = lastSyncedAt || (!full_sync ? new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString() : null);
     let startingAfter: string | null = null;
     let hasMore = true;
     let totalFetched = 0;
@@ -164,8 +165,8 @@ Deno.serve(async (req) => {
 
     while (hasMore) {
       let url = "https://api.stripe.com/v1/balance_transactions?limit=100";
-      if (lastSyncedAt) {
-        const gte = Math.floor(new Date(lastSyncedAt).getTime() / 1000);
+      if (effectiveLastSynced) {
+        const gte = Math.floor(new Date(effectiveLastSynced).getTime() / 1000);
         url += `&created[gte]=${gte}`;
       }
       if (startingAfter) url += `&starting_after=${startingAfter}`;

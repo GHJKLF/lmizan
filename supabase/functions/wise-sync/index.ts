@@ -154,7 +154,7 @@ Deno.serve(async (req) => {
       ? "2020-01-01T00:00:00.000Z"
       : conn.last_synced_at
         ? new Date(conn.last_synced_at).toISOString()
-        : "2020-01-01T00:00:00.000Z";
+        : new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString();
 
     let newTxs: any[];
 
