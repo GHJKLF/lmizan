@@ -1,71 +1,98 @@
 
 
-## Add "Sync Latest" / "Full Sync" split-button and update edge functions
+## PayPal Sync Architecture Overhaul
 
-### Overview
-Replace the single "Sync All" button with a split-button dropdown offering two modes:
-- **Sync Latest** (default, fast): fetches only recent transactions (from last_synced_at, or last 90 days if first sync)
-- **Full Sync** (historical, slow): fetches complete history
+### Problem
+- PayPal connections show 0 or very few transactions because first sync defaults to 90 days instead of full history
+- No automatic scheduled sync -- users must manually click "Sync Latest"
+- No background sync-scheduler function for pg_cron
 
-### Changes
+### Changes (PayPal-focused, no Wise/Stripe code changes)
 
-**File 1: `src/pages/Index.tsx`** -- UI and handler changes
+---
 
-1. Add `ChevronDown` to lucide-react imports
-2. Add `syncMenuOpen` state and a ref for click-outside handling
-3. Update `handleSyncAll` signature to `async (fullSync: boolean = false)`
-4. Update the three edge function invocations to pass `full_sync: fullSync` in the body:
-   - Wise: replace `{ wise_connection_id: conn.id, days_back: 90 }` with `{ wise_connection_id: conn.id, full_sync: fullSync }`
-   - PayPal: replace `{ connection_id: conn.id }` with `{ connection_id: conn.id, full_sync: fullSync }`
-   - Stripe: replace `{ connection_id: conn.id }` with `{ connection_id: conn.id, full_sync: fullSync }`
-5. Replace the single "Sync All" button (lines 203-210) with a split-button:
-   - Left part: "Sync Latest" button that calls `handleSyncAll(false)`
-   - Right part: small chevron-down button that toggles a dropdown
-   - Dropdown contains one item: "Full Sync" that calls `handleSyncAll(true)`
-   - Click-outside closes the dropdown
-   - Both parts disabled while syncing; spinner shown on left part
+### 1. Fix paypal-sync first-sync logic (`supabase/functions/paypal-sync/index.ts`)
 
-**File 2: `supabase/functions/wise-sync/index.ts`** -- 90-day default for quick sync
-
-Lines 153-157 currently default to `"2020-01-01"` when there's no `last_synced_at`. Change to default to 90 days back when `full_sync` is false:
+Update the intervalStart calculation (lines 107-111) so that when `last_synced_at` is null (first sync), it ALWAYS does a full ~3-year sync regardless of the `full_sync` parameter:
 
 ```
-const intervalStart = full_sync
-  ? "2020-01-01T00:00:00.000Z"
-  : conn.last_synced_at
-    ? new Date(conn.last_synced_at).toISOString()
-    : new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString();
-```
-
-**File 3: `supabase/functions/paypal-sync/index.ts`** -- Add full_sync parameter
-
-1. Change body parsing to: `const { connection_id, full_sync } = await req.json();`
-2. Replace the intervalStart calculation:
-
-```
-const intervalStart = full_sync
+const isFirstSync = !conn.last_synced_at;
+const intervalStart = (full_sync || isFirstSync)
   ? new Date(Date.now() - (2 * 365 + 335) * 24 * 60 * 60 * 1000).toISOString()
-  : conn.last_synced_at
-    ? new Date(conn.last_synced_at).toISOString()
-    : new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString();
+  : new Date(conn.last_synced_at).toISOString();
 ```
 
-**File 4: `supabase/functions/stripe-sync/index.ts`** -- Add full_sync parameter
-
-1. Change body parsing to: `const { connection_id, full_sync } = await req.json();`
-2. Replace `const lastSyncedAt = conn.last_synced_at;` with:
-
+Add a debug log after the fetch loop:
 ```
-const lastSyncedAt = full_sync ? null : conn.last_synced_at;
-const effectiveLastSynced = lastSyncedAt || (!full_sync ? new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString() : null);
+console.log(`PayPal sync: chunks=${chunks.length} fetched=${allTxDetails.length} range=${intervalStart} to ${intervalEnd}`);
 ```
 
-3. Update the URL-building logic to use `effectiveLastSynced` instead of `lastSyncedAt` for the `created[gte]` filter
+Also update auth to support service-role calls from the scheduler: if the bearer token matches the service role key pattern (verified via `getUser` failure but service role header present), allow the request by reading the `user_id` from the connection instead.
 
-### Behavior summary
+Specifically, replace the strict user-auth block with a dual-mode approach:
+- Try `getUser()` first -- if it succeeds, proceed as normal (user-initiated sync)
+- If it fails but the Authorization header contains the service role key, allow the request (scheduler-initiated sync) -- the `user_id` comes from the connection record itself
+- This is safe because the connection lookup uses `get_paypal_connection_with_secret` (a SECURITY DEFINER function) via service role client
 
-| Scenario | Wise | PayPal | Stripe |
-|----------|------|--------|--------|
-| Sync Latest (has last_synced_at) | From last_synced_at | From last_synced_at | From last_synced_at |
-| Sync Latest (first sync) | Last 90 days | Last 90 days | Last 90 days |
-| Full Sync | From 2020-01-01 | ~3 years back | All history |
+### 2. Auto-trigger full sync on first connection (`src/components/PayPalConnectionWizard.tsx`)
+
+The wizard already triggers sync on line 116, but without `full_sync: true`. Since we're fixing the edge function to always do full sync when `last_synced_at` is null, no change needed here -- the edge function will automatically detect it's a first sync.
+
+No changes to this file.
+
+### 3. Create sync-scheduler edge function (`supabase/functions/sync-scheduler/index.ts`)
+
+New edge function that:
+- Authenticates using the service role key (no user session -- called by pg_cron)
+- Queries all `paypal_connections`, `wise_connections`, and `stripe_connections` using service role client
+- For each connection, calls the respective sync function via `fetch()` to the edge function URL, passing the service role key as the Authorization bearer token and `full_sync: false`
+- Logs results per connection and returns a JSON summary
+- Handles errors per-connection (one failure doesn't stop others)
+
+### 4. Update config.toml
+
+Add entry for sync-scheduler:
+```toml
+[functions.sync-scheduler]
+verify_jwt = false
+```
+
+### 5. Database: Enable pg_cron + pg_net and schedule the job
+
+**Migration**: Enable `pg_cron` and `pg_net` extensions:
+```sql
+CREATE EXTENSION IF NOT EXISTS pg_cron WITH SCHEMA pg_catalog;
+CREATE EXTENSION IF NOT EXISTS pg_net WITH SCHEMA extensions;
+```
+
+**Data insert** (not migration, contains project-specific values): Schedule the cron job to run every 4 hours:
+```sql
+SELECT cron.schedule(
+  'sync-all-connections',
+  '0 */4 * * *',
+  $$
+  SELECT net.http_post(
+    url := 'https://bxrxrdloufobxdkdehtc.supabase.co/functions/v1/sync-scheduler',
+    headers := '{"Content-Type": "application/json", "Authorization": "Bearer <ANON_KEY>"}'::jsonb,
+    body := '{}'::jsonb
+  ) AS request_id;
+  $$
+);
+```
+
+### 6. No changes to Index.tsx
+
+The existing `handleSyncAll` already passes `full_sync` correctly. The PayPalConnectionWizard already auto-triggers sync on connection. No UI changes needed.
+
+### Files touched
+1. `supabase/functions/paypal-sync/index.ts` -- fix first-sync logic + add scheduler auth bypass
+2. `supabase/functions/sync-scheduler/index.ts` -- new file
+3. `supabase/config.toml` -- add sync-scheduler entry (auto-managed)
+4. Database migration -- enable pg_cron and pg_net
+5. Database insert -- schedule the cron job
+
+### Files NOT touched
+- `supabase/functions/wise-sync/index.ts`
+- `supabase/functions/stripe-sync/index.ts`
+- `src/pages/Index.tsx`
+- `src/components/PayPalConnectionWizard.tsx`
