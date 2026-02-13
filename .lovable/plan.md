@@ -1,56 +1,14 @@
 
 
-## Fix: Transactions and AI Insights views show empty when account is selected
+## Fix: Account transactions capped at 1000 records
 
 ### Problem
-When a specific account is selected in the sidebar, the Transactions tab shows "0 records" and AI Insights has no data. This happens because both views always receive the global `transactions` state (which is empty until the slow 92k-row fetch completes), ignoring the already-loaded `accountTransactions`.
+`fetchAccountTransactions` uses `batchSize = 5000`, but Supabase PostgREST caps responses at 1000 rows. The pagination loop exits early because `data.length (1000) < batchSize (5000)`, mistakenly thinking all data was fetched.
 
-### Solution
-Three surgical changes in `src/pages/Index.tsx` only -- no other files modified.
+### Fix
+One-line change in `src/services/dataService.ts`, line 125:
 
-### Change 1: Conditional lazy-load trigger (lines 145-149)
-Only call `loadTransactions()` when `selectedAccount === 'ALL'`. When a specific account is selected, the existing account-level useEffect already handles loading.
+Change `const batchSize = 5000;` to `const batchSize = 1000;`
 
-```typescript
-// Before
-useEffect(() => {
-  if (currentView === 'TRANSACTIONS' || currentView === 'AI_INSIGHTS') {
-    loadTransactions();
-  }
-}, [currentView, loadTransactions]);
+This aligns with the working `fetchTransactions` method and ensures the pagination loop correctly continues when exactly 1000 rows are returned.
 
-// After
-useEffect(() => {
-  if ((currentView === 'TRANSACTIONS' || currentView === 'AI_INSIGHTS') && selectedAccount === 'ALL') {
-    loadTransactions();
-  }
-}, [currentView, selectedAccount, loadTransactions]);
-```
-
-### Change 2: TransactionTable data source (lines 245-251)
-Pass `accountTransactions` when a specific account is selected, and scope the refresh handler accordingly.
-
-```typescript
-<TransactionTable
-  transactions={selectedAccount !== 'ALL' ? accountTransactions : transactions}
-  selectedAccount={selectedAccount}
-  onRefresh={async () => {
-    if (selectedAccount !== 'ALL') {
-      await loadAccountTransactions(selectedAccount);
-    } else {
-      txLoadedRef.current = false;
-      await loadTransactions();
-    }
-  }}
-/>
-```
-
-### Change 3: AIInsightsView data source (lines 253-255)
-Same pattern -- pass filtered data when an account is selected.
-
-```typescript
-<AIInsightsView transactions={selectedAccount !== 'ALL' ? accountTransactions : transactions} />
-```
-
-### Result
-All three views (Dashboard, Transactions, AI Insights) correctly use `accountTransactions` when an account is selected and `transactions` when viewing ALL. No changes to child components.
