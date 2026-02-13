@@ -143,10 +143,10 @@ const Index: React.FC = () => {
 
   // Lazy-load transactions when navigating to views that need them
   useEffect(() => {
-    if (currentView === 'TRANSACTIONS' || currentView === 'AI_INSIGHTS') {
+    if ((currentView === 'TRANSACTIONS' || currentView === 'AI_INSIGHTS') && selectedAccount === 'ALL') {
       loadTransactions();
     }
-  }, [currentView, loadTransactions]);
+  }, [currentView, selectedAccount, loadTransactions]);
 
   // Load only selected account's transactions for drill-down
   useEffect(() => {
@@ -244,14 +244,21 @@ const Index: React.FC = () => {
 
         {currentView === 'TRANSACTIONS' && (
           <TransactionTable
-            transactions={transactions}
+            transactions={selectedAccount !== 'ALL' ? accountTransactions : transactions}
             selectedAccount={selectedAccount}
-            onRefresh={async () => { txLoadedRef.current = false; await loadTransactions(); }}
+            onRefresh={async () => {
+              if (selectedAccount !== 'ALL') {
+                await loadAccountTransactions(selectedAccount);
+              } else {
+                txLoadedRef.current = false;
+                await loadTransactions();
+              }
+            }}
           />
         )}
 
         {currentView === 'AI_INSIGHTS' && (
-          <AIInsightsView transactions={transactions} />
+          <AIInsightsView transactions={selectedAccount !== 'ALL' ? accountTransactions : transactions} />
         )}
       </main>
 
