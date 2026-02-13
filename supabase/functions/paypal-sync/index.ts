@@ -60,6 +60,9 @@ Deno.serve(async (req) => {
       });
     }
 
+    // Dual-mode auth: user session OR service-role key (for scheduler)
+    let isSchedulerCall = false;
+
     const supabaseUser = createClient(
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_ANON_KEY")!,
@@ -67,11 +70,19 @@ Deno.serve(async (req) => {
     );
 
     const { data: { user }, error: userErr } = await supabaseUser.auth.getUser();
+
     if (userErr || !user) {
-      return new Response(JSON.stringify({ error: "Unauthorized" }), {
-        status: 401,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      // Check if this is a service-role call from the scheduler
+      const token = authHeader.replace("Bearer ", "");
+      const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+      if (token === serviceRoleKey) {
+        isSchedulerCall = true;
+      } else {
+        return new Response(JSON.stringify({ error: "Unauthorized" }), {
+          status: 401,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
     }
 
     const supabaseAdmin = createClient(
@@ -98,17 +109,26 @@ Deno.serve(async (req) => {
       );
     }
 
+    // For user-initiated calls, verify ownership
+    if (!isSchedulerCall && user!.id !== conn.user_id) {
+      return new Response(JSON.stringify({ error: "Forbidden" }), {
+        status: 403,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     const env = conn.environment || "live";
     const base = env === "sandbox" ? "https://api-m.sandbox.paypal.com" : "https://api-m.paypal.com";
     const token = await getPayPalToken(conn.client_id, conn.client_secret, env);
 
     const now = new Date();
     const intervalEnd = now.toISOString();
-    const intervalStart = full_sync
+
+    // First sync (last_synced_at is null) ALWAYS does full 3-year sync
+    const isFirstSync = !conn.last_synced_at;
+    const intervalStart = (full_sync || isFirstSync)
       ? new Date(Date.now() - (2 * 365 + 335) * 24 * 60 * 60 * 1000).toISOString()
-      : conn.last_synced_at
-        ? new Date(conn.last_synced_at).toISOString()
-        : new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString();
+      : new Date(conn.last_synced_at).toISOString();
 
     // Build 31-day chunks
     const chunks: { start: string; end: string }[] = [];
@@ -133,6 +153,8 @@ Deno.serve(async (req) => {
         page++;
       }
     }
+
+    console.log(`PayPal sync: chunks=${chunks.length} fetched=${allTxDetails.length} range=${intervalStart} to ${intervalEnd}`);
 
     if (allTxDetails.length === 0) {
       await supabaseAdmin
@@ -169,7 +191,7 @@ Deno.serve(async (req) => {
         const txId = info.transaction_id || "";
         const grossAmount = parseFloat(info.transaction_amount?.value || "0");
         const feeAmount = parseFloat(info.fee_amount?.value || "0");
-        const netAmount = grossAmount + feeAmount; // fee is negative
+        const netAmount = grossAmount + feeAmount;
         const type = netAmount >= 0 ? "Inflow" : "Outflow";
         const amount = Math.abs(netAmount);
         const date = (info.transaction_initiation_date || "").split("T")[0];
