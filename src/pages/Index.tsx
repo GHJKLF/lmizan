@@ -89,10 +89,8 @@ const Index: React.FC = () => {
   const loadData = useCallback(async () => {
     setTxLoading(true);
     try {
-      const [txs, accs] = await Promise.all([
-        DataService.fetchTransactions(),
-        DataService.fetchAccounts(),
-      ]);
+      const txs = await DataService.fetchTransactions();
+      const accs = [...new Set(txs.map(t => t.account).filter(Boolean))].sort();
       setTransactions(txs);
       setAccounts(accs);
     } catch (e) {
