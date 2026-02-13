@@ -175,29 +175,26 @@ const Index: React.FC = () => {
           </button>
         </div>
 
-        {/* Dashboard */}
-        <div style={{ display: currentView === 'DASHBOARD' ? 'block' : 'none' }}>
+        {currentView === 'DASHBOARD' && (
           <Dashboard
             transactions={transactions}
             selectedAccount={selectedAccount}
             onSelectAccount={setSelectedAccount}
             loading={txLoading}
           />
-        </div>
+        )}
 
-        {/* Transactions */}
-        <div style={{ display: currentView === 'TRANSACTIONS' ? 'block' : 'none' }}>
+        {currentView === 'TRANSACTIONS' && (
           <TransactionTable
             transactions={transactions}
             selectedAccount={selectedAccount}
             onRefresh={loadData}
           />
-        </div>
+        )}
 
-        {/* AI Insights */}
-        <div style={{ display: currentView === 'AI_INSIGHTS' ? 'block' : 'none' }}>
+        {currentView === 'AI_INSIGHTS' && (
           <AIInsightsView transactions={transactions} />
-        </div>
+        )}
       </main>
 
       {/* Modals */}

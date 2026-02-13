@@ -14,7 +14,7 @@ const TIER_COLORS: Record<string, string> = {
   ASSET: 'hsl(var(--chart-4))',
 };
 
-const AccountBreakdown: React.FC<Props> = ({ data, onSelectAccount }) => {
+const AccountBreakdown: React.FC<Props> = React.memo(({ data, onSelectAccount }) => {
   const top = data.slice(0, 15);
 
   return (
@@ -72,6 +72,6 @@ const AccountBreakdown: React.FC<Props> = ({ data, onSelectAccount }) => {
       </CardContent>
     </Card>
   );
-};
+});
 
 export default AccountBreakdown;
