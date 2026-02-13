@@ -122,7 +122,7 @@ export const DataService = {
 
   async fetchAccountTransactions(account: string): Promise<Transaction[]> {
     const allRows: any[] = [];
-    const batchSize = 5000;
+    const batchSize = 1000;
     let from = 0;
 
     while (true) {
