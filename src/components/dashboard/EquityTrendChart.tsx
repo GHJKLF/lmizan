@@ -8,7 +8,7 @@ interface Props {
   data: EquityPoint[];
 }
 
-const EquityTrendChart: React.FC<Props> = React.memo(({ data }) => {
+const EquityTrendChart: React.FC<Props> = ({ data }) => {
   if (data.length === 0) return null;
 
   const first = data[0].equity;
@@ -75,6 +75,6 @@ const EquityTrendChart: React.FC<Props> = React.memo(({ data }) => {
       </CardContent>
     </Card>
   );
-});
+};
 
 export default EquityTrendChart;

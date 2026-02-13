@@ -29,10 +29,10 @@ const PIE_COLORS = [
   'hsl(50 60% 50%)',
 ];
 
-const AccountDashboard: React.FC<Props> = React.memo(({ account, summaries, transactions, onBack }) => {
+const AccountDashboard: React.FC<Props> = ({ account, summaries, transactions, onBack }) => {
   const accountTxs = useMemo(() => transactions.filter((t) => t.account === account), [transactions, account]);
-  const monthlyFlows = useMemo(() => computeMonthlyFlows(accountTxs), [accountTxs]);
-  const categoryBreakdown = useMemo(() => computeCategoryBreakdown(accountTxs), [accountTxs]);
+  const monthlyFlows = useMemo(() => computeMonthlyFlows(transactions, account), [transactions, account]);
+  const categoryBreakdown = useMemo(() => computeCategoryBreakdown(transactions, account), [transactions, account]);
   const recentTxs = useMemo(
     () =>
       [...accountTxs].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).slice(0, 10),
@@ -219,6 +219,6 @@ const AccountDashboard: React.FC<Props> = React.memo(({ account, summaries, tran
       </Card>
     </div>
   );
-});
+};
 
 export default AccountDashboard;

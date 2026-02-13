@@ -7,7 +7,7 @@ interface Props {
   data: MonthlyFlow[];
 }
 
-const CashFlowWaterfall: React.FC<Props> = React.memo(({ data }) => {
+const CashFlowWaterfall: React.FC<Props> = ({ data }) => {
   const recent = data.slice(-12); // Last 12 months
 
   return (
@@ -51,6 +51,6 @@ const CashFlowWaterfall: React.FC<Props> = React.memo(({ data }) => {
       </CardContent>
     </Card>
   );
-});
+};
 
 export default CashFlowWaterfall;
