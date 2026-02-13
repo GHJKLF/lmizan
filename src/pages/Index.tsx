@@ -11,7 +11,7 @@ import ImportModal from '@/components/ai/ImportModal';
 import UpdateBalanceModal from '@/components/modals/UpdateBalanceModal';
 import SettingsModal from '@/components/modals/SettingsModal';
 import PayoutReconciler from '@/components/modals/PayoutReconciler';
-import { Upload, Scale, ArrowLeftRight, RefreshCw, Loader2 } from 'lucide-react';
+import { Upload, Scale, ArrowLeftRight, RefreshCw, Loader2, ChevronDown } from 'lucide-react';
 import { toast } from 'sonner';
 
 const Index: React.FC = () => {
@@ -33,8 +33,21 @@ const Index: React.FC = () => {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [reconcilerOpen, setReconcilerOpen] = useState(false);
   const [syncing, setSyncing] = useState(false);
+  const [syncMenuOpen, setSyncMenuOpen] = useState(false);
+  const syncMenuRef = useRef<HTMLDivElement>(null);
 
-  const handleSyncAll = async () => {
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (syncMenuRef.current && !syncMenuRef.current.contains(e.target as Node)) {
+        setSyncMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const handleSyncAll = async (fullSync: boolean = false) => {
+    setSyncMenuOpen(false);
     setSyncing(true);
     try {
       let totalInserted = 0;
@@ -46,7 +59,7 @@ const Index: React.FC = () => {
       if (wiseConns && wiseConns.length > 0) {
         for (const conn of wiseConns) {
           const res = await supabase.functions.invoke('wise-sync', {
-            body: { wise_connection_id: conn.id, days_back: 90 },
+            body: { wise_connection_id: conn.id, full_sync: fullSync },
           });
           if (!res.error && res.data) totalInserted += res.data.inserted || 0;
         }
@@ -59,7 +72,7 @@ const Index: React.FC = () => {
       if (paypalConns && paypalConns.length > 0) {
         for (const conn of paypalConns as any[]) {
           const res = await supabase.functions.invoke('paypal-sync', {
-            body: { connection_id: conn.id },
+            body: { connection_id: conn.id, full_sync: fullSync },
           });
           if (!res.error && res.data) totalInserted += res.data.synced || 0;
         }
@@ -72,7 +85,7 @@ const Index: React.FC = () => {
       if (stripeConns && stripeConns.length > 0) {
         for (const conn of stripeConns as any[]) {
           const res = await supabase.functions.invoke('stripe-sync', {
-            body: { connection_id: conn.id },
+            body: { connection_id: conn.id, full_sync: fullSync },
           });
           if (!res.error && res.data) totalInserted += res.data.synced || 0;
         }
@@ -200,14 +213,35 @@ const Index: React.FC = () => {
       <main className="flex-1 ml-72 p-6 overflow-auto">
         {/* Action bar */}
         <div className="flex justify-end gap-2 mb-4">
-          <button
-            onClick={handleSyncAll}
-            disabled={syncing}
-            className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-foreground border border-border hover:bg-accent rounded-lg transition-colors disabled:opacity-50"
-          >
-            {syncing ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
-            Sync All
-          </button>
+          <div className="relative" ref={syncMenuRef}>
+            <div className="flex items-stretch">
+              <button
+                onClick={() => handleSyncAll(false)}
+                disabled={syncing}
+                className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-foreground border border-border border-r-0 hover:bg-accent rounded-l-lg transition-colors disabled:opacity-50"
+              >
+                {syncing ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
+                Sync Latest
+              </button>
+              <button
+                onClick={() => setSyncMenuOpen(!syncMenuOpen)}
+                disabled={syncing}
+                className="flex items-center px-1.5 py-2 text-xs text-foreground border border-border hover:bg-accent rounded-r-lg transition-colors disabled:opacity-50"
+              >
+                <ChevronDown size={12} />
+              </button>
+            </div>
+            {syncMenuOpen && (
+              <div className="absolute right-0 mt-1 w-36 bg-popover border border-border rounded-lg shadow-lg z-50">
+                <button
+                  onClick={() => handleSyncAll(true)}
+                  className="w-full text-left px-3 py-2 text-xs font-medium text-foreground hover:bg-accent rounded-lg transition-colors"
+                >
+                  Full Sync
+                </button>
+              </div>
+            )}
+          </div>
           <button
             onClick={() => setReconcilerOpen(true)}
             className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-foreground border border-border hover:bg-accent rounded-lg transition-colors"
