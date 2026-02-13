@@ -52,23 +52,16 @@ export const DataService = {
     let allRows: any[] = [];
     let from = 0;
     const batchSize = 5000;
-    let totalCount: number | null = null;
 
     while (true) {
-      const query = supabase
+      const { data, error } = await supabase
         .from('transactions')
-        .select('*', from === 0 ? { count: 'exact' } : { count: undefined as any })
+        .select('*')
         .range(from, from + batchSize - 1);
-
-      const { data, error, count } = await query;
 
       if (error) {
         console.error('Error fetching transactions batch:', error);
         break;
-      }
-
-      if (from === 0 && count != null) {
-        totalCount = count;
       }
 
       if (!data || data.length === 0) break;
@@ -76,7 +69,6 @@ export const DataService = {
       allRows = allRows.concat(data);
       from += batchSize;
 
-      if (totalCount != null && allRows.length >= totalCount) break;
       if (data.length < batchSize) break;
     }
 
