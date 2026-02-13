@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ViewState, Transaction } from '@/types';
+import { ViewState, Transaction, DashboardData } from '@/types';
 import { DataService } from '@/services/dataService';
 import { supabase } from '@/integrations/supabase/client';
 import AppSidebar from '@/components/AppSidebar';
@@ -18,9 +18,12 @@ const Index: React.FC = () => {
   const navigate = useNavigate();
   const [currentView, setCurrentView] = useState<ViewState>('DASHBOARD');
   const [selectedAccount, setSelectedAccount] = useState<string | 'ALL'>('ALL');
+  const [dashboardData, setDashboardData] = useState<DashboardData | null>(null);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [accounts, setAccounts] = useState<string[]>([]);
-  const [txLoading, setTxLoading] = useState(true);
+  const [dashboardLoading, setDashboardLoading] = useState(true);
+  const [txLoading, setTxLoading] = useState(false);
+  const txLoadedRef = useRef(false);
 
   // Modal states
   const [importOpen, setImportOpen] = useState(false);
@@ -78,7 +81,9 @@ const Index: React.FC = () => {
       } else {
         toast.success(`Sync complete: ${totalInserted} new transactions`);
       }
-      await loadData();
+      // Refresh both dashboard data and invalidate tx cache
+      txLoadedRef.current = false;
+      await loadDashboardData();
     } catch (err: any) {
       toast.error(err.message || 'Sync failed');
     } finally {
@@ -86,36 +91,63 @@ const Index: React.FC = () => {
     }
   };
 
-  const loadData = useCallback(async () => {
+  const loadDashboardData = useCallback(async () => {
+    setDashboardLoading(true);
+    try {
+      const [dd, accsResult] = await Promise.all([
+        DataService.fetchDashboardData(),
+        supabase.from('accounts').select('name'),
+      ]);
+      const accs = (accsResult.data || []).map((r: any) => r.name as string).filter(Boolean).sort();
+      setDashboardData(dd);
+      setAccounts(accs);
+    } catch (e) {
+      console.error('Failed to load dashboard data:', e);
+    } finally {
+      setDashboardLoading(false);
+    }
+  }, []);
+
+  const loadTransactions = useCallback(async () => {
+    if (txLoadedRef.current) return;
     setTxLoading(true);
     try {
-    const [txs, accsResult] = await Promise.all([
-      DataService.fetchTransactions(),
-      supabase.from('accounts').select('name'),
-    ]);
-    const accs = (accsResult.data || []).map((r: any) => r.name as string).filter(Boolean).sort();
-    setTransactions(txs);
-    setAccounts(accs);
+      const txs = await DataService.fetchTransactions();
+      setTransactions(txs);
+      txLoadedRef.current = true;
     } catch (e) {
-      console.error('Failed to load data:', e);
+      console.error('Failed to load transactions:', e);
     } finally {
       setTxLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    loadData();
-  }, [loadData]);
+    loadDashboardData();
+  }, [loadDashboardData]);
+
+  // Lazy-load transactions when navigating to views that need them
+  useEffect(() => {
+    if (currentView === 'TRANSACTIONS' || currentView === 'AI_INSIGHTS') {
+      loadTransactions();
+    }
+  }, [currentView, loadTransactions]);
+
+  // Also lazy-load transactions when drilling into a single account
+  useEffect(() => {
+    if (selectedAccount !== 'ALL') {
+      loadTransactions();
+    }
+  }, [selectedAccount, loadTransactions]);
 
   const handleRenameAccount = async (oldName: string, newName: string) => {
     await DataService.renameAccount(oldName, newName);
-    await loadData();
+    txLoadedRef.current = false;
+    await loadDashboardData();
   };
 
   const handleDeleteAccount = async (accountName: string) => {
-    // First delete all transactions for this account
     await supabase.from('transactions').delete().eq('account', accountName);
-    // Then delete the account row
     const { data } = await supabase.from('accounts').select('id, name').eq('name', accountName).limit(1);
     if (data && data.length > 0) {
       const { error } = await supabase.from('accounts').delete().eq('id', data[0].id);
@@ -123,9 +155,15 @@ const Index: React.FC = () => {
         toast.error('Failed to delete account');
       } else {
         toast.success(`Account "${accountName}" and its transactions deleted`);
-        await loadData();
+        txLoadedRef.current = false;
+        await loadDashboardData();
       }
     }
+  };
+
+  const handleImportComplete = async () => {
+    txLoadedRef.current = false;
+    await loadDashboardData();
   };
 
   return (
@@ -178,10 +216,12 @@ const Index: React.FC = () => {
 
         {currentView === 'DASHBOARD' && (
           <Dashboard
+            dashboardData={dashboardData}
             transactions={transactions}
             selectedAccount={selectedAccount}
             onSelectAccount={setSelectedAccount}
-            loading={txLoading}
+            loading={dashboardLoading}
+            txLoading={txLoading}
           />
         )}
 
@@ -189,7 +229,7 @@ const Index: React.FC = () => {
           <TransactionTable
             transactions={transactions}
             selectedAccount={selectedAccount}
-            onRefresh={loadData}
+            onRefresh={async () => { txLoadedRef.current = false; await loadTransactions(); }}
           />
         )}
 
@@ -199,8 +239,8 @@ const Index: React.FC = () => {
       </main>
 
       {/* Modals */}
-      <ImportModal transactions={transactions} accounts={accounts} onImportComplete={loadData} open={importOpen} onClose={() => setImportOpen(false)} />
-      <UpdateBalanceModal transactions={transactions} open={balanceOpen} onClose={() => setBalanceOpen(false)} onComplete={loadData} />
+      <ImportModal transactions={transactions} accounts={accounts} onImportComplete={handleImportComplete} open={importOpen} onClose={() => setImportOpen(false)} />
+      <UpdateBalanceModal transactions={transactions} open={balanceOpen} onClose={() => setBalanceOpen(false)} onComplete={handleImportComplete} />
       <SettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} />
       <PayoutReconciler transactions={transactions} open={reconcilerOpen} onClose={() => setReconcilerOpen(false)} />
     </div>

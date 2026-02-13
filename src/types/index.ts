@@ -40,3 +40,32 @@ export interface AccountSummary {
   tier: 'LIQUID_BANK' | 'PROCESSOR' | 'ASSET';
   lastUpdated: string;
 }
+
+export interface DashboardAccountBalance {
+  account: string;
+  currency: string;
+  total: number;
+  available: number;
+  reserved: number;
+  tier: string;
+  balance_eur: number;
+  last_updated: string;
+}
+
+export interface DashboardEquityPoint {
+  date: string;
+  equity: number;
+}
+
+export interface DashboardMonthlyFlow {
+  month: string;
+  inflow: number;
+  outflow: number;
+  net: number;
+}
+
+export interface DashboardData {
+  accountBalances: DashboardAccountBalance[];
+  equityTrend: DashboardEquityPoint[];
+  monthlyFlows: DashboardMonthlyFlow[];
+}
