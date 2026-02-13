@@ -24,6 +24,8 @@ const Index: React.FC = () => {
   const [dashboardLoading, setDashboardLoading] = useState(true);
   const [txLoading, setTxLoading] = useState(false);
   const txLoadedRef = useRef(false);
+  const [accountTransactions, setAccountTransactions] = useState<Transaction[]>([]);
+  const [accountTxLoading, setAccountTxLoading] = useState(false);
 
   // Modal states
   const [importOpen, setImportOpen] = useState(false);
@@ -122,6 +124,19 @@ const Index: React.FC = () => {
     }
   }, []);
 
+  const loadAccountTransactions = useCallback(async (account: string) => {
+    setAccountTxLoading(true);
+    setAccountTransactions([]);
+    try {
+      const txs = await DataService.fetchAccountTransactions(account);
+      setAccountTransactions(txs);
+    } catch (e) {
+      console.error('Failed to load account transactions:', e);
+    } finally {
+      setAccountTxLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     loadDashboardData();
   }, [loadDashboardData]);
@@ -133,12 +148,14 @@ const Index: React.FC = () => {
     }
   }, [currentView, loadTransactions]);
 
-  // Also lazy-load transactions when drilling into a single account
+  // Load only selected account's transactions for drill-down
   useEffect(() => {
     if (selectedAccount !== 'ALL') {
-      loadTransactions();
+      loadAccountTransactions(selectedAccount);
+    } else {
+      setAccountTransactions([]);
     }
-  }, [selectedAccount, loadTransactions]);
+  }, [selectedAccount, loadAccountTransactions]);
 
   const handleRenameAccount = async (oldName: string, newName: string) => {
     await DataService.renameAccount(oldName, newName);
@@ -217,11 +234,11 @@ const Index: React.FC = () => {
         {currentView === 'DASHBOARD' && (
           <Dashboard
             dashboardData={dashboardData}
-            transactions={transactions}
+            transactions={accountTransactions}
             selectedAccount={selectedAccount}
             onSelectAccount={setSelectedAccount}
             loading={dashboardLoading}
-            txLoading={txLoading}
+            txLoading={accountTxLoading}
           />
         )}
 

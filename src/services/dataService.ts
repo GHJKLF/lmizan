@@ -120,6 +120,46 @@ export const DataService = {
     }));
   },
 
+  async fetchAccountTransactions(account: string): Promise<Transaction[]> {
+    const allRows: any[] = [];
+    const batchSize = 5000;
+    let from = 0;
+
+    while (true) {
+      const { data, error } = await supabase
+        .from('transactions')
+        .select('*')
+        .eq('account', account)
+        .order('date', { ascending: false })
+        .range(from, from + batchSize - 1);
+
+      if (error) {
+        console.error('Error fetching account transactions:', error);
+        break;
+      }
+      if (!data || data.length === 0) break;
+      allRows.push(...data);
+      if (data.length < batchSize) break;
+      from += batchSize;
+    }
+
+    return allRows.map((row: any) => ({
+      id: row.id,
+      date: row.date,
+      description: row.description,
+      category: row.category,
+      amount: row.amount,
+      currency: row.currency as Currency,
+      account: row.account,
+      type: row.type as TransactionType,
+      notes: row.notes,
+      runningBalance: row.running_balance,
+      balanceAvailable: row.balance_available,
+      balanceReserved: row.balance_reserved,
+      createdAt: row.created_at,
+    }));
+  },
+
   async fetchAccounts(): Promise<string[]> {
     const { data, error } = await supabase
       .from('transactions')
