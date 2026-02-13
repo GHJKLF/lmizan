@@ -1,4 +1,4 @@
-import { Transaction, Currency, TransactionType } from '@/types';
+import { Transaction, Currency, TransactionType, DashboardData } from '@/types';
 import { supabase } from '@/integrations/supabase/client';
 
 const LS_TX_KEY = 'imizan_transactions';
@@ -48,6 +48,37 @@ const isAuthenticated = async (): Promise<string | null> => {
 };
 
 export const DataService = {
+  async fetchDashboardData(): Promise<DashboardData> {
+    const [balancesRes, equityRes, flowsRes] = await Promise.all([
+      supabase.rpc('get_account_balances'),
+      supabase.rpc('get_equity_trend'),
+      supabase.rpc('get_monthly_cash_flow'),
+    ]);
+
+    return {
+      accountBalances: (balancesRes.data || []).map((r: any) => ({
+        account: r.account,
+        currency: r.currency,
+        total: Number(r.total),
+        available: Number(r.available),
+        reserved: Number(r.reserved),
+        tier: r.tier,
+        balance_eur: Number(r.balance_eur),
+        last_updated: r.last_updated,
+      })),
+      equityTrend: (equityRes.data || []).map((r: any) => ({
+        date: r.date,
+        equity: Number(r.equity),
+      })),
+      monthlyFlows: (flowsRes.data || []).map((r: any) => ({
+        month: r.month,
+        inflow: Number(r.inflow),
+        outflow: Number(r.outflow),
+        net: Number(r.net),
+      })),
+    };
+  },
+
   async fetchTransactions(): Promise<Transaction[]> {
     let allRows: any[] = [];
     let from = 0;

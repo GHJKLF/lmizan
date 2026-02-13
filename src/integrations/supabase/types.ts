@@ -330,6 +330,35 @@ export type Database = {
       }
     }
     Functions: {
+      get_account_balances: {
+        Args: never
+        Returns: {
+          account: string
+          available: number
+          balance_eur: number
+          currency: string
+          last_updated: string
+          reserved: number
+          tier: string
+          total: number
+        }[]
+      }
+      get_equity_trend: {
+        Args: never
+        Returns: {
+          date: string
+          equity: number
+        }[]
+      }
+      get_monthly_cash_flow: {
+        Args: never
+        Returns: {
+          inflow: number
+          month: string
+          net: number
+          outflow: number
+        }[]
+      }
       get_paypal_connection_with_secret: {
         Args: { p_connection_id: string }
         Returns: {
