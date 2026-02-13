@@ -49,37 +49,28 @@ const isAuthenticated = async (): Promise<string | null> => {
 
 export const DataService = {
   async fetchTransactions(): Promise<Transaction[]> {
-    let allRows: any[] = [];
-    let from = 0;
     const batchSize = 5000;
-    let totalCount: number | null = null;
+    let offset = 0;
+    let allRows: any[] = [];
 
     while (true) {
-      let query;
-      if (from === 0) {
-        query = supabase.from('transactions').select('*', { count: 'exact' }).range(from, from + batchSize - 1);
-      } else {
-        query = supabase.from('transactions').select('*').range(from, from + batchSize - 1);
-      }
-
-      const { data, error, count } = await query;
+      const { data, error } = await supabase
+        .from('transactions')
+        .select('*')
+        .range(offset, offset + batchSize - 1);
 
       if (error) {
         console.error('Error fetching transactions batch:', error);
         break;
       }
 
-      if (from === 0 && count != null) {
-        totalCount = count;
-      }
-
       if (!data || data.length === 0) break;
 
       allRows = allRows.concat(data);
-      from += batchSize;
 
-      if (totalCount != null && allRows.length >= totalCount) break;
       if (data.length < batchSize) break;
+
+      offset += batchSize;
     }
 
     return allRows.map((row: any) => ({
