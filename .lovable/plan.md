@@ -1,48 +1,56 @@
 
 
-## Fix: Account drill-down loading all 92k transactions
+## Fix: Transactions and AI Insights views show empty when account is selected
 
 ### Problem
-Clicking an individual account in the sidebar triggers `loadTransactions()` which fetches ALL 92,000+ transactions. The account dashboard shows a spinner until all data loads (60-90 seconds).
+When a specific account is selected in the sidebar, the Transactions tab shows "0 records" and AI Insights has no data. This happens because both views always receive the global `transactions` state (which is empty until the slow 92k-row fetch completes), ignoring the already-loaded `accountTransactions`.
 
 ### Solution
-Add a filtered fetch method that only retrieves transactions for the selected account (typically 500-5,000 rows), and use separate state for account-specific transactions.
+Three surgical changes in `src/pages/Index.tsx` only -- no other files modified.
 
-### Changes
+### Change 1: Conditional lazy-load trigger (lines 145-149)
+Only call `loadTransactions()` when `selectedAccount === 'ALL'`. When a specific account is selected, the existing account-level useEffect already handles loading.
 
-**File 1: `src/services/dataService.ts`**
+```typescript
+// Before
+useEffect(() => {
+  if (currentView === 'TRANSACTIONS' || currentView === 'AI_INSIGHTS') {
+    loadTransactions();
+  }
+}, [currentView, loadTransactions]);
 
-Add `fetchAccountTransactions(account: string)` method after `fetchTransactions()`. This method:
-- Filters by `.eq('account', account)` 
-- Orders by date descending
-- Uses 5,000-row batches (accounts rarely exceed this)
-- Maps rows to `Transaction` objects using the same mapping as `fetchTransactions()`
+// After
+useEffect(() => {
+  if ((currentView === 'TRANSACTIONS' || currentView === 'AI_INSIGHTS') && selectedAccount === 'ALL') {
+    loadTransactions();
+  }
+}, [currentView, selectedAccount, loadTransactions]);
+```
 
-**File 2: `src/pages/Index.tsx`**
+### Change 2: TransactionTable data source (lines 245-251)
+Pass `accountTransactions` when a specific account is selected, and scope the refresh handler accordingly.
 
-Three targeted changes:
+```typescript
+<TransactionTable
+  transactions={selectedAccount !== 'ALL' ? accountTransactions : transactions}
+  selectedAccount={selectedAccount}
+  onRefresh={async () => {
+    if (selectedAccount !== 'ALL') {
+      await loadAccountTransactions(selectedAccount);
+    } else {
+      txLoadedRef.current = false;
+      await loadTransactions();
+    }
+  }}
+/>
+```
 
-1. Add new state variables:
-   - `accountTransactions: Transaction[]` -- holds only the selected account's transactions
-   - `accountTxLoading: boolean` -- loading state for account drill-down
+### Change 3: AIInsightsView data source (lines 253-255)
+Same pattern -- pass filtered data when an account is selected.
 
-2. Add `loadAccountTransactions(account)` callback that calls `DataService.fetchAccountTransactions()` and sets `accountTransactions` state
-
-3. Replace the useEffect at lines 137-141 (which calls `loadTransactions()` on account change) to instead call `loadAccountTransactions(selectedAccount)` and clear state when returning to ALL
-
-4. Update Dashboard props to pass `accountTransactions` and `accountTxLoading` instead of the global `transactions`/`txLoading` for the drill-down view:
-   ```
-   <Dashboard
-     dashboardData={dashboardData}
-     transactions={accountTransactions}   // was: transactions
-     selectedAccount={selectedAccount}
-     onSelectAccount={setSelectedAccount}
-     loading={dashboardLoading}
-     txLoading={accountTxLoading}          // was: txLoading
-   />
-   ```
-
-The existing `loadTransactions()` and its useEffect for TRANSACTIONS/AI_INSIGHTS views remain unchanged.
+```typescript
+<AIInsightsView transactions={selectedAccount !== 'ALL' ? accountTransactions : transactions} />
+```
 
 ### Result
-Account drill-down loads in 1-3 seconds instead of 60-90 seconds.
+All three views (Dashboard, Transactions, AI Insights) correctly use `accountTransactions` when an account is selected and `transactions` when viewing ALL. No changes to child components.
