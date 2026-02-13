@@ -1,23 +1,34 @@
 
 
-## Fix fetchTransactions() batch size to match database row limit
+## Fix: Sidebar showing only 4 accounts instead of 20+
 
 ### Problem
 
-The `batchSize` is set to 5000, but the database returns a maximum of 1000 rows per request. When the first batch returns 1000 rows (less than 5000), the loop termination condition `data.length < batchSize` fires immediately, stopping after just one batch.
+`loadData` in `src/pages/Index.tsx` calls `DataService.fetchAccounts()` separately, which queries `transactions.select('account')` without pagination. The 1000-row Supabase limit means it only sees accounts from the first 1000 transactions, missing most accounts.
 
 ### Fix
 
-**File:** `src/services/dataService.ts`, line 54
+**File:** `src/pages/Index.tsx`, lines 89-103
 
-Change:
+Replace the `loadData` function to derive accounts directly from the already-paginated transactions result instead of making a separate unpaginated query:
+
 ```typescript
-const batchSize = 5000;
-```
-To:
-```typescript
-const batchSize = 1000;
+const loadData = useCallback(async () => {
+  setTxLoading(true);
+  try {
+    const txs = await DataService.fetchTransactions();
+    const accs = [...new Set(txs.map(t => t.account).filter(Boolean))].sort();
+    setTransactions(txs);
+    setAccounts(accs);
+  } catch (e) {
+    console.error('Failed to load data:', e);
+  } finally {
+    setTxLoading(false);
+  }
+}, []);
 ```
 
-This is the only change needed. The loop will now correctly paginate through all 92,571 transactions in ~93 batches of 1000 rows each.
+This works because `fetchTransactions` already paginates through all 92,571 rows. Extracting unique accounts from those rows guarantees completeness and saves one API call.
+
+No other files are changed.
 
