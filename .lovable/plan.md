@@ -1,64 +1,33 @@
 
 
-## Optimize Dashboard Performance
+## Fix fetchTransactions() pagination — only 5,000 of 92,571 transactions loading
 
-Four targeted changes to reduce load time and unnecessary computation.
+### Problem
 
-### 1. Conditional rendering instead of display:none
+Line 60 of `src/services/dataService.ts` passes `{ count: undefined as any }` to Supabase's `.select()` on the second batch onwards. This is an invalid option that causes silent query failure, breaking pagination after the first 5,000 rows.
 
-**File:** `src/pages/Index.tsx` (lines ~178-200)
+### Fix
 
-Replace the three `<div style={{ display: ... }}>` wrappers with conditional rendering using `&&`. This prevents inactive views (and their charts, computations) from running in the background.
+Replace the `fetchTransactions` method (lines 51-97) with a simplified version that:
 
-```
-Before: <div style={{ display: currentView === 'DASHBOARD' ? 'block' : 'none' }}>
-After:  {currentView === 'DASHBOARD' && (<Dashboard ... />)}
-```
+1. Uses plain `.select('*')` with no count options at all
+2. Removes the `totalCount` variable entirely
+3. Relies only on `data.length < batchSize` or empty results to stop the loop
+4. Keeps `.range()` pagination which works correctly
+5. Preserves existing field mapping (notes, runningBalance, balanceAvailable, balanceReserved, createdAt)
 
-Same pattern for TRANSACTIONS and AI_INSIGHTS views.
+### Technical Details
 
-### 2. Wrap chart components with React.memo()
-
-**Files:** 5 dashboard components
-
-- `src/components/dashboard/LiquidityHeader.tsx`
-- `src/components/dashboard/CashFlowWaterfall.tsx`
-- `src/components/dashboard/EquityTrendChart.tsx`
-- `src/components/dashboard/AccountBreakdown.tsx`
-- `src/components/dashboard/AccountDashboard.tsx`
-
-Change the component definition pattern from:
-```typescript
-const ComponentName: React.FC<Props> = (props) => {
-```
-to:
-```typescript
-const ComponentName: React.FC<Props> = React.memo((props) => {
-```
-And close with `})` instead of `}`.
-
-This prevents re-renders when parent state changes but props haven't changed.
-
-### 3. Faster transaction fetching
-
-**File:** `src/services/dataService.ts` (lines 51-77)
-
-- Increase `batchSize` from 1000 to 5000
-- On the first request, use `select('*', { count: 'exact' })` to get total count
-- Use that count to determine when all rows are fetched, instead of probing with empty responses
-
-### 4. Avoid redundant filtering in AccountDashboard
-
-**File:** `src/components/dashboard/AccountDashboard.tsx` (lines ~37-38)
-
-Pass the already-filtered `accountTxs` directly to `computeMonthlyFlows()` and `computeCategoryBreakdown()` without the account parameter, since both functions accept an optional account and filter internally. This avoids filtering the full transaction array twice.
+**File:** `src/services/dataService.ts`, lines 51-97
 
 ```typescript
-// Before
-const monthlyFlows = useMemo(() => computeMonthlyFlows(transactions, account), [transactions, account]);
-const categoryBreakdown = useMemo(() => computeCategoryBreakdown(transactions, account), [transactions, account]);
+// BEFORE (broken):
+.select('*', from === 0 ? { count: 'exact' } : { count: undefined as any })
 
-// After
-const monthlyFlows = useMemo(() => computeMonthlyFlows(accountTxs), [accountTxs]);
-const categoryBreakdown = useMemo(() => computeCategoryBreakdown(accountTxs), [accountTxs]);
+// AFTER (fixed):
+.select('*')
 ```
+
+The full replacement removes `totalCount`, the conditional count logic, and the `totalCount`-based break condition. The loop terminates when a batch returns fewer than 5,000 rows or returns empty/error.
+
+No other files are affected.
