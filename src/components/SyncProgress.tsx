@@ -90,7 +90,15 @@ const SyncProgress: React.FC<SyncProgressProps> = ({ connectionId, provider, acc
   return (
     <div className={`rounded-lg border border-border p-3 ${style.bg} text-sm space-y-2 w-80 relative`}>
       <button
-        onClick={() => setHidden(true)}
+        onClick={async () => {
+          setHidden(true);
+          // Mark running sessions as completed so they don't reappear on refresh
+          await supabase
+            .from('sync_sessions')
+            .update({ status: 'completed', completed_at: new Date().toISOString() })
+            .eq('connection_id', connectionId)
+            .eq('status', 'running');
+        }}
         className="absolute top-2 right-2 p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
         aria-label="Dismiss"
       >
