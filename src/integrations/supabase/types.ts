@@ -119,6 +119,120 @@ export type Database = {
         }
         Relationships: []
       }
+      sync_jobs: {
+        Row: {
+          attempts: number | null
+          chunk_end: string | null
+          chunk_start: string | null
+          completed_at: string | null
+          connection_id: string
+          created_at: string | null
+          cursor: string | null
+          error_message: string | null
+          id: string
+          job_type: string
+          max_attempts: number | null
+          next_retry_at: string | null
+          priority: number | null
+          provider: string
+          records_processed: number | null
+          session_id: string | null
+          started_at: string | null
+          status: string
+          total_estimated: number | null
+          user_id: string
+        }
+        Insert: {
+          attempts?: number | null
+          chunk_end?: string | null
+          chunk_start?: string | null
+          completed_at?: string | null
+          connection_id: string
+          created_at?: string | null
+          cursor?: string | null
+          error_message?: string | null
+          id?: string
+          job_type: string
+          max_attempts?: number | null
+          next_retry_at?: string | null
+          priority?: number | null
+          provider: string
+          records_processed?: number | null
+          session_id?: string | null
+          started_at?: string | null
+          status?: string
+          total_estimated?: number | null
+          user_id: string
+        }
+        Update: {
+          attempts?: number | null
+          chunk_end?: string | null
+          chunk_start?: string | null
+          completed_at?: string | null
+          connection_id?: string
+          created_at?: string | null
+          cursor?: string | null
+          error_message?: string | null
+          id?: string
+          job_type?: string
+          max_attempts?: number | null
+          next_retry_at?: string | null
+          priority?: number | null
+          provider?: string
+          records_processed?: number | null
+          session_id?: string | null
+          started_at?: string | null
+          status?: string
+          total_estimated?: number | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      sync_sessions: {
+        Row: {
+          completed_at: string | null
+          completed_chunks: number | null
+          connection_id: string
+          error_message: string | null
+          id: string
+          provider: string
+          started_at: string | null
+          status: string | null
+          sync_type: string
+          total_chunks: number | null
+          total_records: number | null
+          user_id: string
+        }
+        Insert: {
+          completed_at?: string | null
+          completed_chunks?: number | null
+          connection_id: string
+          error_message?: string | null
+          id?: string
+          provider: string
+          started_at?: string | null
+          status?: string | null
+          sync_type: string
+          total_chunks?: number | null
+          total_records?: number | null
+          user_id: string
+        }
+        Update: {
+          completed_at?: string | null
+          completed_chunks?: number | null
+          connection_id?: string
+          error_message?: string | null
+          id?: string
+          provider?: string
+          started_at?: string | null
+          status?: string | null
+          sync_type?: string
+          total_chunks?: number | null
+          total_records?: number | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       transactions: {
         Row: {
           account: string | null
@@ -132,6 +246,8 @@ export type Database = {
           description: string | null
           id: string
           notes: string | null
+          provider: string | null
+          provider_transaction_id: string | null
           running_balance: number | null
           type: string | null
           user_id: string
@@ -148,6 +264,8 @@ export type Database = {
           description?: string | null
           id: string
           notes?: string | null
+          provider?: string | null
+          provider_transaction_id?: string | null
           running_balance?: number | null
           type?: string | null
           user_id: string
@@ -164,9 +282,29 @@ export type Database = {
           description?: string | null
           id?: string
           notes?: string | null
+          provider?: string | null
+          provider_transaction_id?: string | null
           running_balance?: number | null
           type?: string | null
           user_id?: string
+        }
+        Relationships: []
+      }
+      webhook_events: {
+        Row: {
+          event_id: string
+          processed_at: string | null
+          provider: string
+        }
+        Insert: {
+          event_id: string
+          processed_at?: string | null
+          provider: string
+        }
+        Update: {
+          event_id?: string
+          processed_at?: string | null
+          provider?: string
         }
         Relationships: []
       }
@@ -330,6 +468,37 @@ export type Database = {
       }
     }
     Functions: {
+      claim_next_sync_job: {
+        Args: never
+        Returns: {
+          attempts: number | null
+          chunk_end: string | null
+          chunk_start: string | null
+          completed_at: string | null
+          connection_id: string
+          created_at: string | null
+          cursor: string | null
+          error_message: string | null
+          id: string
+          job_type: string
+          max_attempts: number | null
+          next_retry_at: string | null
+          priority: number | null
+          provider: string
+          records_processed: number | null
+          session_id: string | null
+          started_at: string | null
+          status: string
+          total_estimated: number | null
+          user_id: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "sync_jobs"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       get_account_balances: {
         Args: never
         Returns: {
@@ -401,6 +570,10 @@ export type Database = {
           user_id: string
           webhook_secret: string
         }[]
+      }
+      update_sync_session_progress: {
+        Args: { p_session_id: string }
+        Returns: undefined
       }
     }
     Enums: {
