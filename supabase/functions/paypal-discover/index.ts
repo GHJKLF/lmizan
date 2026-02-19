@@ -6,12 +6,25 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
+function toBase64(str: string): string {
+  // Use TextEncoder for reliable base64 encoding (handles special chars in secrets)
+  const bytes = new TextEncoder().encode(str);
+  let binary = "";
+  for (const b of bytes) binary += String.fromCharCode(b);
+  return btoa(binary);
+}
+
 async function getPayPalToken(clientId: string, clientSecret: string, env: string = "live"): Promise<string> {
   const base = env === "sandbox" ? "https://api-m.sandbox.paypal.com" : "https://api-m.paypal.com";
+  const credentials = `${clientId}:${clientSecret}`;
+  const encoded = toBase64(credentials);
+  
+  console.log(`PayPal OAuth: env=${env}, base=${base}, clientId length=${clientId.length}, secret length=${clientSecret.length}`);
+  
   const res = await fetch(`${base}/v1/oauth2/token`, {
     method: "POST",
     headers: {
-      Authorization: `Basic ${btoa(`${clientId}:${clientSecret}`)}`,
+      Authorization: `Basic ${encoded}`,
       "Content-Type": "application/x-www-form-urlencoded",
     },
     body: "grant_type=client_credentials",
@@ -19,7 +32,8 @@ async function getPayPalToken(clientId: string, clientSecret: string, env: strin
 
   if (!res.ok) {
     const errText = await res.text();
-    if (res.status === 401) throw new Error("Invalid PayPal credentials");
+    console.error(`PayPal OAuth failed [${res.status}]: ${errText}`);
+    if (res.status === 401) throw new Error(`Invalid PayPal credentials. Verify your Client ID and Secret are for the ${env} environment. PayPal response: ${errText}`);
     throw new Error(`PayPal OAuth error [${res.status}]: ${errText}`);
   }
 
