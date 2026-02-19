@@ -783,17 +783,63 @@ const Settings: React.FC = () => {
         <WiseConnectionWizard
           open={wizardOpen}
           onOpenChange={setWizardOpen}
-          onComplete={loadData}
+          onComplete={async () => {
+            await loadData();
+            // Trigger historical sync for the newest Wise connection
+            const { data } = await supabase
+              .from('wise_connections_safe' as any)
+              .select('id')
+              .order('created_at', { ascending: false })
+              .limit(1) as { data: any[] | null };
+            if (data?.[0]?.id) {
+              supabase.functions.invoke('start-historical-sync', {
+                body: { connection_id: data[0].id, provider: 'wise' },
+              }).then(res => {
+                if (res.error) console.error('Historical sync trigger failed:', res.error);
+                else toast.success('Historical sync queued — progress will appear on the dashboard.');
+              });
+            }
+          }}
         />
         <PayPalConnectionWizard
           isOpen={paypalWizardOpen}
           onClose={() => setPaypalWizardOpen(false)}
-          onSuccess={loadData}
+          onSuccess={async () => {
+            await loadData();
+            const { data } = await supabase
+              .from('paypal_connections_safe' as any)
+              .select('id')
+              .order('created_at', { ascending: false })
+              .limit(1) as { data: any[] | null };
+            if (data?.[0]?.id) {
+              supabase.functions.invoke('start-historical-sync', {
+                body: { connection_id: data[0].id, provider: 'paypal' },
+              }).then(res => {
+                if (res.error) console.error('Historical sync trigger failed:', res.error);
+                else toast.success('Historical sync queued — progress will appear on the dashboard.');
+              });
+            }
+          }}
         />
         <StripeConnectionWizard
           isOpen={stripeWizardOpen}
           onClose={() => setStripeWizardOpen(false)}
-          onSuccess={loadData}
+          onSuccess={async () => {
+            await loadData();
+            const { data } = await supabase
+              .from('stripe_connections_safe' as any)
+              .select('id')
+              .order('created_at', { ascending: false })
+              .limit(1) as { data: any[] | null };
+            if (data?.[0]?.id) {
+              supabase.functions.invoke('start-historical-sync', {
+                body: { connection_id: data[0].id, provider: 'stripe' },
+              }).then(res => {
+                if (res.error) console.error('Historical sync trigger failed:', res.error);
+                else toast.success('Historical sync queued — progress will appear on the dashboard.');
+              });
+            }
+          }}
         />
       </div>
     </div>
