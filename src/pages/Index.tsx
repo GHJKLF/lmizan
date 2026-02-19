@@ -11,6 +11,7 @@ import ImportModal from '@/components/ai/ImportModal';
 import UpdateBalanceModal from '@/components/modals/UpdateBalanceModal';
 import SettingsModal from '@/components/modals/SettingsModal';
 import PayoutReconciler from '@/components/modals/PayoutReconciler';
+import SyncProgress from '@/components/SyncProgress';
 import { Upload, Scale, ArrowLeftRight, RefreshCw, Loader2, ChevronDown } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -35,6 +36,9 @@ const Index: React.FC = () => {
   const [syncing, setSyncing] = useState(false);
   const [syncMenuOpen, setSyncMenuOpen] = useState(false);
   const syncMenuRef = useRef<HTMLDivElement>(null);
+  const [runningSessions, setRunningSessions] = useState<
+    { connection_id: string; provider: string; account_name: string }[]
+  >([]);
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -152,6 +156,39 @@ const Index: React.FC = () => {
 
   useEffect(() => {
     loadDashboardData();
+
+    // Fetch running sync sessions
+    (async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      const { data: sessions } = await supabase
+        .from('sync_sessions')
+        .select('connection_id, provider')
+        .eq('user_id', user.id)
+        .eq('status', 'running');
+      if (sessions?.length) {
+        // Get account names from connections
+        const enriched = await Promise.all(
+          sessions.map(async (s: any) => {
+            const table =
+              s.provider === 'paypal' ? 'paypal_connections_safe' :
+              s.provider === 'wise' ? 'wise_connections_safe' :
+              'stripe_connections_safe';
+            const { data } = await supabase
+              .from(table)
+              .select('account_name')
+              .eq('id', s.connection_id)
+              .limit(1);
+            return {
+              connection_id: s.connection_id,
+              provider: s.provider,
+              account_name: data?.[0]?.account_name || s.provider,
+            };
+          })
+        );
+        setRunningSessions(enriched);
+      }
+    })();
   }, [loadDashboardData]);
 
   // Lazy-load transactions when navigating to views that need them
@@ -301,6 +338,20 @@ const Index: React.FC = () => {
       <UpdateBalanceModal transactions={transactions} open={balanceOpen} onClose={() => setBalanceOpen(false)} onComplete={handleImportComplete} />
       <SettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} />
       <PayoutReconciler transactions={transactions} open={reconcilerOpen} onClose={() => setReconcilerOpen(false)} />
+
+      {/* Sync progress toasts */}
+      {runningSessions.length > 0 && (
+        <div className="fixed bottom-4 right-4 z-50 flex flex-col gap-2">
+          {runningSessions.map((s) => (
+            <SyncProgress
+              key={s.connection_id}
+              connectionId={s.connection_id}
+              provider={s.provider as 'paypal' | 'wise' | 'stripe'}
+              accountName={s.account_name}
+            />
+          ))}
+        </div>
+      )}
     </div>
   );
 };
