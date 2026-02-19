@@ -40,6 +40,7 @@ const PayPalConnectionWizard: React.FC<Props> = ({ isOpen, onClose, onSuccess })
   const [clientId, setClientId] = useState('');
   const [clientSecret, setClientSecret] = useState('');
   const [showSecret, setShowSecret] = useState(false);
+  const [environment, setEnvironment] = useState<'live' | 'sandbox'>('live');
   const [discovering, setDiscovering] = useState(false);
   const [email, setEmail] = useState('');
   const [balances, setBalances] = useState<DiscoveredBalance[]>([]);
@@ -51,6 +52,7 @@ const PayPalConnectionWizard: React.FC<Props> = ({ isOpen, onClose, onSuccess })
     setClientId('');
     setClientSecret('');
     setShowSecret(false);
+    setEnvironment('live');
     setDiscovering(false);
     setEmail('');
     setBalances([]);
@@ -63,7 +65,7 @@ const PayPalConnectionWizard: React.FC<Props> = ({ isOpen, onClose, onSuccess })
     setDiscovering(true);
     try {
       const res = await supabase.functions.invoke('paypal-discover', {
-        body: { client_id: clientId.trim(), client_secret: clientSecret.trim() },
+        body: { client_id: clientId.trim(), client_secret: clientSecret.trim(), environment },
       });
       if (res.error) throw new Error(res.error.message || 'Discovery failed');
       if (res.data?.error) throw new Error(res.data.error);
@@ -95,6 +97,7 @@ const PayPalConnectionWizard: React.FC<Props> = ({ isOpen, onClose, onSuccess })
           client_secret: clientSecret.trim(),
           email: email,
           currency: primaryCurrency,
+          environment: environment,
         } as any)
         .select('id')
         .single();
@@ -204,6 +207,31 @@ const PayPalConnectionWizard: React.FC<Props> = ({ isOpen, onClose, onSuccess })
               <p className="text-xs text-muted-foreground mt-1.5">
                 Find these at developer.paypal.com → Dashboard → My Apps & Credentials
               </p>
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-muted-foreground uppercase mb-1.5">
+                Environment
+              </label>
+              <div className="flex gap-2">
+                <Button
+                  type="button"
+                  variant={environment === 'live' ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setEnvironment('live')}
+                  className="flex-1"
+                >
+                  Live
+                </Button>
+                <Button
+                  type="button"
+                  variant={environment === 'sandbox' ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setEnvironment('sandbox')}
+                  className="flex-1"
+                >
+                  Sandbox
+                </Button>
+              </div>
             </div>
             <Button
               onClick={handleDiscover}
