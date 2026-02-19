@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Progress } from '@/components/ui/progress';
-import { CheckCircle2, AlertCircle, Loader2 } from 'lucide-react';
+import { CheckCircle2, AlertCircle, Loader2, X } from 'lucide-react';
 
 interface SyncProgressProps {
   connectionId: string;
@@ -88,8 +88,15 @@ const SyncProgress: React.FC<SyncProgressProps> = ({ connectionId, provider, acc
   const etaLabel = mins > 0 ? `~${mins}m ${secs}s remaining` : `~${secs}s remaining`;
 
   return (
-    <div className={`rounded-lg border border-border p-3 ${style.bg} text-sm space-y-2 w-80`}>
-      <div className="flex items-center gap-2">
+    <div className={`rounded-lg border border-border p-3 ${style.bg} text-sm space-y-2 w-80 relative`}>
+      <button
+        onClick={() => setHidden(true)}
+        className="absolute top-2 right-2 p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+        aria-label="Dismiss"
+      >
+        <X size={14} />
+      </button>
+      <div className="flex items-center gap-2 pr-6">
         <span className={`font-semibold ${style.color}`}>{style.label}</span>
         <span className="text-muted-foreground truncate">{accountName}</span>
       </div>
