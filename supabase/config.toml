@@ -47,3 +47,6 @@ verify_jwt = false
 
 [functions.sync-scheduler]
 verify_jwt = false
+
+[functions.handle-webhook]
+verify_jwt = false
