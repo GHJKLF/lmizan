@@ -29,3 +29,21 @@ verify_jwt = false
 
 [functions.paypal-balances]
 verify_jwt = false
+
+[functions.start-historical-sync]
+verify_jwt = false
+
+[functions.process-sync-chunk]
+verify_jwt = false
+
+[functions.stripe-discover]
+verify_jwt = false
+
+[functions.stripe-sync]
+verify_jwt = false
+
+[functions.stripe-balances]
+verify_jwt = false
+
+[functions.sync-scheduler]
+verify_jwt = false
