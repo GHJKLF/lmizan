@@ -6,6 +6,7 @@ import {
   Wallet,
   Settings,
   TrendingUp,
+  Scale,
   LogOut,
   Building2,
   CreditCard,
@@ -165,6 +166,10 @@ const AppSidebar: React.FC<AppSidebarProps> = ({
             <div onClick={() => onNavigate('PNL')} className={navItemClass(currentView === 'PNL')}>
               <TrendingUp size={18} />
               <span>P&L</span>
+            </div>
+            <div onClick={() => onNavigate('EQUITY')} className={navItemClass(currentView === 'EQUITY')}>
+              <Scale size={18} />
+              <span>Equity</span>
             </div>
             <div onClick={() => onNavigate('TRANSACTIONS')} className={navItemClass(currentView === 'TRANSACTIONS')}>
               <Receipt size={18} />

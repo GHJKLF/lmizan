@@ -8,6 +8,7 @@ import Dashboard from '@/components/dashboard/Dashboard';
 import TransactionTable from '@/components/transactions/TransactionTable';
 import AIInsightsView from '@/components/ai/AIInsightsView';
 import PnlReport from '@/components/pnl/PnlReport';
+import EquityDashboard from '@/components/equity/EquityDashboard';
 import ImportModal from '@/components/ai/ImportModal';
 import UpdateBalanceModal from '@/components/modals/UpdateBalanceModal';
 import SettingsModal from '@/components/modals/SettingsModal';
@@ -356,6 +357,10 @@ const Index: React.FC = () => {
         )}
 
         {currentView === 'PNL' && <PnlReport />}
+
+        {currentView === 'EQUITY' && dashboardData && (
+          <EquityDashboard accountBalances={dashboardData.accountBalances} />
+        )}
       </main>
 
       {/* Modals */}
