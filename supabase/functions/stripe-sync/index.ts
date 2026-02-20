@@ -217,6 +217,29 @@ Deno.serve(async (req) => {
         .eq("id", connection_id);
     }
 
+    // ── Fetch and store Stripe API balance ──
+    try {
+      const balRes = await fetch("https://api.stripe.com/v1/balance", { headers: stripeHeaders });
+      if (balRes.ok) {
+        const balData = await balRes.json();
+        const availableArr = balData.available || [];
+        const pendingArr = balData.pending || [];
+        // Sum all currencies converted to base amount (cents to EUR)
+        const balAvailable = availableArr.reduce((sum: number, b: any) => sum + fromStripeAmount(b.amount || 0, b.currency || "eur"), 0);
+        const balPending = pendingArr.reduce((sum: number, b: any) => sum + fromStripeAmount(b.amount || 0, b.currency || "eur"), 0);
+        await supabaseAdmin
+          .from("stripe_connections")
+          .update({
+            balance_available: balAvailable,
+            balance_pending: balPending,
+            balance_fetched_at: new Date().toISOString(),
+          })
+          .eq("id", connection_id);
+      }
+    } catch (balErr) {
+      console.error("Failed to fetch Stripe balance:", balErr);
+    }
+
     // ── PHASE 2: Backfill (older transactions) ──
     let totalBackfilled = 0;
 
