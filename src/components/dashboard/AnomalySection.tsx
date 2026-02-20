@@ -70,8 +70,7 @@ const AnomalySection: React.FC<Props> = ({ refreshKey }) => {
   const alerts = anomalies.filter(a => a.status === 'open' && a.severity === 'alert').length;
   const criticals = anomalies.filter(a => a.status === 'open' && a.severity === 'critical').length;
 
-  if (loading && anomalies.length === 0) return null;
-  if (!showAll && anomalies.length === 0) return null;
+  // Always render the section shell so it's visible on the dashboard
 
   return (
     <div className="space-y-3">
