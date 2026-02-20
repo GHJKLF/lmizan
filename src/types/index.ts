@@ -14,7 +14,21 @@ export enum TransactionType {
   TRANSFER = 'Transfer',
 }
 
-export type ViewState = 'DASHBOARD' | 'TRANSACTIONS' | 'AI_INSIGHTS';
+export type ViewState = 'DASHBOARD' | 'TRANSACTIONS' | 'AI_INSIGHTS' | 'PNL';
+
+export interface PnlMonth {
+  month: string;
+  gross_revenue_eur: number;
+  net_revenue_eur: number;
+  cogs_eur: number;
+  gross_profit_eur: number;
+  variable_costs_eur: number;
+  contribution_margin_eur: number;
+  opex_eur: number;
+  ebitda_eur: number;
+  transaction_count: number;
+  revenue_by_currency: Record<string, number>;
+}
 
 export interface Transaction {
   id: string;

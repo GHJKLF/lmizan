@@ -328,6 +328,12 @@ export const DataService = {
     // No-op when authenticated — data is always in DB
   },
 
+  async fetchPnlReport(year: number): Promise<any[]> {
+    const { data, error } = await supabase.rpc('get_pnl_report' as any, { p_year: year });
+    if (error) throw error;
+    return (data || []) as any[];
+  },
+
   async reconcilePayouts(
     payouts: PayoutItem[],
     _provider: string,

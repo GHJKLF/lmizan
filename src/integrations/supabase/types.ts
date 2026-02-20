@@ -599,6 +599,22 @@ export type Database = {
           user_id: string
         }[]
       }
+      get_pnl_report: {
+        Args: { p_year?: number }
+        Returns: {
+          cogs_eur: number
+          contribution_margin_eur: number
+          ebitda_eur: number
+          gross_profit_eur: number
+          gross_revenue_eur: number
+          month: string
+          net_revenue_eur: number
+          opex_eur: number
+          revenue_by_currency: Json
+          transaction_count: number
+          variable_costs_eur: number
+        }[]
+      }
       get_stripe_connection_with_key: {
         Args: { p_connection_id: string }
         Returns: {
