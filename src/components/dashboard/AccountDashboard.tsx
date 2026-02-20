@@ -31,11 +31,18 @@ const PIE_COLORS = [
 
 const AccountDashboard: React.FC<Props> = React.memo(({ account, summaries, transactions, onBack }) => {
   const accountTxs = useMemo(() => transactions.filter((t) => t.account === account), [transactions, account]);
-  const transferVolume = useMemo(() => {
-    return accountTxs
-      .filter((t) => t.type === 'Transfer')
-      .reduce((sum, t) => sum + toEUR(t.amount, t.currency), 0);
+  const { transferVolume, totalInflow, totalOutflow } = useMemo(() => {
+    let transfers = 0, inflow = 0, outflow = 0;
+    accountTxs.forEach((t) => {
+      const eur = toEUR(t.amount, t.currency);
+      if (t.type === 'Transfer') transfers += eur;
+      else if (t.type === 'Inflow') inflow += eur;
+      else if (t.type === 'Outflow') outflow += eur;
+    });
+    return { transferVolume: transfers, totalInflow: inflow, totalOutflow: outflow };
   }, [accountTxs]);
+  const netRevenueProcessed = totalInflow - totalOutflow;
+  const actualBalance = totalInflow - totalOutflow - transferVolume;
   const monthlyFlows = useMemo(() => computeMonthlyFlows(accountTxs), [accountTxs]);
   const categoryBreakdown = useMemo(() => computeCategoryBreakdown(accountTxs), [accountTxs]);
   const recentTxs = useMemo(
@@ -94,7 +101,7 @@ const AccountDashboard: React.FC<Props> = React.memo(({ account, summaries, tran
                   <Card className="border-border/60">
                     <CardContent className="p-4">
                       <p className="text-xs font-semibold text-muted-foreground uppercase">Transfers</p>
-                      <p className="text-xl font-bold text-blue-500 mt-1">
+                      <p className="text-xl font-bold text-primary mt-1">
                         {formatEUR(transferVolume)}
                       </p>
                       <p className="text-xs text-muted-foreground">Pass-through volume</p>
@@ -104,6 +111,43 @@ const AccountDashboard: React.FC<Props> = React.memo(({ account, summaries, tran
               </div>
             </div>
           ))}
+
+          {/* Computed stats across all currencies */}
+          {transferVolume > 0 && (
+            <div className="space-y-2">
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                Analytics (EUR equivalent)
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <Card className="border-border/60">
+                  <CardContent className="p-4">
+                    <p className="text-xs font-semibold text-muted-foreground uppercase">Net Revenue Processed</p>
+                    <p className="text-xl font-bold text-foreground mt-1">
+                      {formatEUR(netRevenueProcessed)}
+                    </p>
+                    <p className="text-xs text-muted-foreground">Inflow − Outflow</p>
+                  </CardContent>
+                </Card>
+                <Card className="border-border/60">
+                  <CardContent className="p-4">
+                    <p className="text-xs font-semibold text-muted-foreground uppercase">Computed Balance</p>
+                    <p className="text-xl font-bold text-foreground mt-1">
+                      {formatEUR(actualBalance)}
+                    </p>
+                    <p className="text-xs text-muted-foreground">Inflow − Outflow − Transfers</p>
+                  </CardContent>
+                </Card>
+                <Card className="border-border/60 bg-muted/30">
+                  <CardContent className="p-4">
+                    <p className="text-xs font-semibold text-muted-foreground uppercase">Reconciliation</p>
+                    <p className="text-sm text-muted-foreground mt-1">
+                      {formatEUR(totalInflow)} − {formatEUR(totalOutflow)} − {formatEUR(transferVolume)} = <span className="font-bold text-foreground">{formatEUR(actualBalance)}</span>
+                    </p>
+                  </CardContent>
+                </Card>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
