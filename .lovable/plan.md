@@ -1,46 +1,76 @@
 
 
-## Fix: PayPal Sync RESULTSET_TOO_LARGE Error
+## Fix: Two Stripe Ecozahar Issues
 
-### Problem
-The `paypal-sync` edge function uses 31-day chunks, but a single chunk can contain more than 10,000 transactions (PayPal's hard limit), causing RESULTSET_TOO_LARGE errors and a full sync failure.
+### Issue 1: Missing History (only synced from Sep 2024)
 
-### Fix: Adaptive chunk splitting in `supabase/functions/paypal-sync/index.ts`
+**Root cause:** When `stripe-sync` is called without `full_sync`, it defaults to a 90-day lookback window (`Date.now() - 90 days`). When `full_sync` is true, it sets `effectiveLastSynced = null` (no `created[gte]` filter), which fetches everything. The backfill phase (Phase 2) should catch older transactions, but it depends on existing transactions being present first.
 
-**Strategy:** Replace the fixed 31-day chunking with smaller 7-day default chunks, plus automatic retry with halved intervals if RESULTSET_TOO_LARGE is still hit.
+The real problem: the first sync only grabbed 90 days, and then backfill works backwards from the oldest existing record. But if the initial sync was triggered without `full_sync`, it starts from ~90 days ago. Subsequent syncs use `last_synced_at` and only go forward.
 
-#### Changes to `fetchTransactionPage`
-- Detect RESULTSET_TOO_LARGE in the error response and throw a specific typed error so the caller can handle it differently from other API errors.
+**Fix:** Add an optional `start_date` body parameter to `stripe-sync/index.ts`. When provided, it overrides both the `last_synced_at` and the 90-day fallback, using the caller's date as the `created[gte]` floor.
 
-#### Changes to the main chunk loop
-1. Default chunk size reduced from 31 days to 7 days.
-2. Wrap each chunk fetch in a try/catch. If RESULTSET_TOO_LARGE is caught, split that chunk into two halves and push them onto the processing queue (recursive subdivision).
-3. This guarantees convergence -- at 1-day granularity, even the busiest day won't exceed 10,000 transactions.
+**File: `supabase/functions/stripe-sync/index.ts`**
+- Parse `start_date` from the request body alongside `connection_id` and `full_sync`
+- When `start_date` is provided, use it as the effective start (converted to Unix timestamp for `created[gte]`)
+- Priority: `start_date` > `full_sync` > `last_synced_at` > 90-day fallback
 
-#### Same fix applied to `supabase/functions/process-sync-chunk/index.ts`
-The `fetchPaypal` function in the job-based worker has the same vulnerability. Apply the same adaptive subdivision: if a page returns RESULTSET_TOO_LARGE, halve the date range and re-queue by updating the current job's `chunk_end` and creating a new job for the second half.
+**File: `src/pages/Settings.tsx`**
+- Add a "Full Historical Sync" button or option next to the existing Stripe sync button
+- When clicked, call `stripe-sync` with `{ connection_id, start_date: "2020-01-01" }` to fetch all history from day 1
+
+**File: `src/components/StripeConnectionWizard.tsx`**
+- On initial connection, pass `full_sync: true` so the first sync grabs everything rather than just 90 days
+
+### Issue 2: Wrong Balance (reserved funds inflating/deflating balance)
+
+**Root cause:** Stripe "reserved funds" transactions (descriptions like "Reserve", "Reserved Funds", "Scheduled release of reserved funds") are internal holds, not real business inflows/outflows. They're currently classified as Inflow/Outflow, which skews the balance.
+
+**Fix 1: Update `mapType` in `stripe-sync/index.ts`**
+- Add reserved funds detection: if the description matches reserve-related patterns, set type = "Transfer"
+- Patterns to match (case-insensitive): `reserve`, `reserved funds`, `scheduled release of reserved funds`
+
+**Fix 2: Same update in `process-sync-chunk/index.ts`**
+- The Stripe mapping logic on line 185 already handles `payout` as Transfer
+- Add the same reserved funds description check
+
+**Fix 3: Data migration for existing records**
+- Run an UPDATE query to reclassify existing reserved funds transactions as Transfer type:
+```sql
+UPDATE transactions 
+SET type = 'Transfer' 
+WHERE account = 'Stripe Ecozahar' 
+  AND (
+    description ILIKE '%reserve%' 
+    OR description ILIKE '%Reserved Funds%' 
+    OR description ILIKE '%Scheduled release of reserved funds%'
+  );
+```
+
+### Summary of changes
+
+| File | Change |
+|------|--------|
+| `supabase/functions/stripe-sync/index.ts` | Add `start_date` parameter support; add reserved funds -> Transfer mapping in `mapType` |
+| `supabase/functions/process-sync-chunk/index.ts` | Add reserved funds -> Transfer mapping for Stripe transactions |
+| `src/pages/Settings.tsx` | Add "Full Historical Sync" option for Stripe connections |
+| `src/components/StripeConnectionWizard.tsx` | Pass `full_sync: true` on initial connection |
+| Database (data update) | Reclassify existing reserved funds transactions as Transfer |
 
 ### Technical Detail
 
+**`stripe-sync/index.ts` changes:**
 ```text
-paypal-sync/index.ts changes:
-
-1. New error class: ResultSetTooLargeError
-2. fetchTransactionPage: detect 400 + RESULTSET_TOO_LARGE, throw ResultSetTooLargeError
-3. Chunk building: 31 days -> 7 days
-4. Chunk processing loop: wrap in try/catch
-   - On ResultSetTooLargeError: split chunk at midpoint, push both halves back to queue
-   - Minimum chunk = 1 day (safety floor)
-
-process-sync-chunk/index.ts changes:
-
-1. fetchPaypal: detect RESULTSET_TOO_LARGE on the API call
-2. On detection: update current job's chunk_end to midpoint, insert new job for second half
-3. Return empty transactions + null cursor so the job re-queues naturally
+1. Parse { connection_id, full_sync, start_date } from request body
+2. Compute effectiveLastSynced:
+   - If start_date provided: use start_date
+   - Else if full_sync: null (no filter, fetch all)
+   - Else if last_synced_at: use last_synced_at  
+   - Else: 90-day fallback
+3. Update mapType(txType, net, description):
+   - payout -> Transfer
+   - description matches /reserve/i -> Transfer
+   - Otherwise: net >= 0 ? Inflow : Outflow
 ```
 
-### Scope
-- Two edge function files modified
-- No database or frontend changes needed
-- No new dependencies
-
+**No database schema changes needed** -- the `type` column is already a text field and "Transfer" is already a supported value.
