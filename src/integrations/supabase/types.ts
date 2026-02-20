@@ -83,6 +83,51 @@ export type Database = {
         }
         Relationships: []
       }
+      airwallex_balances: {
+        Row: {
+          available_amount: number
+          connection_id: string
+          currency: string
+          id: string
+          pending_amount: number
+          synced_at: string | null
+          total_amount: number
+        }
+        Insert: {
+          available_amount?: number
+          connection_id: string
+          currency: string
+          id?: string
+          pending_amount?: number
+          synced_at?: string | null
+          total_amount?: number
+        }
+        Update: {
+          available_amount?: number
+          connection_id?: string
+          currency?: string
+          id?: string
+          pending_amount?: number
+          synced_at?: string | null
+          total_amount?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "airwallex_balances_connection_id_fkey"
+            columns: ["connection_id"]
+            isOneToOne: false
+            referencedRelation: "airwallex_connections"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "airwallex_balances_connection_id_fkey"
+            columns: ["connection_id"]
+            isOneToOne: false
+            referencedRelation: "airwallex_connections_safe"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       airwallex_connections: {
         Row: {
           account_name: string
