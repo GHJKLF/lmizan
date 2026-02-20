@@ -127,7 +127,7 @@ Deno.serve(async (req) => {
       const mapped = items.map((t: any) => {
         const rawAmount = Number(t.amount || t.debit_amount || t.credit_amount || 0);
         const amount = Math.abs(rawAmount);
-        const currency = (t.currency || conn.currency || "EUR").toUpperCase();
+        const currency = (t.currency || "EUR").toUpperCase();
         const txType = (t.transaction_type || t.type || "").toUpperCase();
         const type = mapType(txType, rawAmount);
 
@@ -165,7 +165,8 @@ Deno.serve(async (req) => {
       .update({ last_synced_at: newestDate || new Date().toISOString() })
       .eq("id", connection_id);
 
-    // STEP 5: Fetch live balances
+    // STEP 5: Fetch ALL live balances (multi-currency wallet)
+    const syncedCurrencies: string[] = [];
     try {
       const balRes = await fetch(`${AIRWALLEX_BASE}/api/v1/balances/current`, {
         headers: awxHeaders,
@@ -173,24 +174,27 @@ Deno.serve(async (req) => {
       if (balRes.ok) {
         const balData = await balRes.json();
         const balances: any[] = Array.isArray(balData) ? balData : balData.items || [];
-        const match = balances.find(
-          (b: any) => (b.currency || "").toUpperCase() === conn.currency.toUpperCase()
-        );
-        if (match) {
-          await supabaseAdmin
-            .from("airwallex_connections")
-            .update({
-              balance_available: Number(match.available_amount || match.total_amount || 0),
-              balance_fetched_at: new Date().toISOString(),
-            })
-            .eq("id", connection_id);
+        if (balances.length > 0) {
+          const balRows = balances.map((b: any) => ({
+            connection_id,
+            currency: (b.currency || "").toUpperCase(),
+            available_amount: Number(b.available_amount || 0),
+            pending_amount: Number(b.pending_amount || 0),
+            total_amount: Number(b.total_amount || 0),
+            synced_at: new Date().toISOString(),
+          }));
+          const { error: balUpsertErr } = await supabaseAdmin
+            .from("airwallex_balances")
+            .upsert(balRows, { onConflict: "connection_id,currency" });
+          if (balUpsertErr) console.error("Balance upsert error:", balUpsertErr);
+          else syncedCurrencies.push(...balRows.map((r: any) => r.currency));
         }
       }
     } catch (balErr) {
       console.error("Balance fetch error:", balErr);
     }
 
-    return new Response(JSON.stringify({ synced: totalInserted }), {
+    return new Response(JSON.stringify({ synced: totalInserted, currencies: syncedCurrencies }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (err) {
