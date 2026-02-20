@@ -264,6 +264,7 @@ const TransactionTable: React.FC<Props> = ({ transactions, selectedAccount, onRe
               <option value="">All Types</option>
               <option value="Inflow">Inflow</option>
               <option value="Outflow">Outflow</option>
+              <option value="Transfer">Transfer</option>
             </select>
             <select value={currencyFilter} onChange={(e) => { setCurrencyFilter(e.target.value); setPage(0); }} className={selectClass}>
               <option value="">All Currencies</option>
@@ -324,6 +325,7 @@ const TransactionTable: React.FC<Props> = ({ transactions, selectedAccount, onRe
                 <select value={newTx.type} onChange={(e) => setNewTx((p) => ({ ...p, type: e.target.value as TransactionType }))} className={selectClass}>
                   <option value="Inflow">Inflow</option>
                   <option value="Outflow">Outflow</option>
+                  <option value="Transfer">Transfer</option>
                 </select>
               </div>
               <button onClick={handleAdd} disabled={actionLoading || !newTx.description.trim() || !newTx.amount} className="px-3 py-1.5 text-xs font-bold text-primary-foreground bg-primary rounded hover:opacity-90 disabled:opacity-50">
@@ -432,10 +434,10 @@ const TransactionTable: React.FC<Props> = ({ transactions, selectedAccount, onRe
                           <input type="number" step="0.01" value={editData.amount ?? 0} onChange={(e) => setEditData((p) => ({ ...p, amount: parseFloat(e.target.value) || 0 }))} className={`${inputClass} w-24 text-right`} />
                         ) : (
                           <span
-                            className={`font-medium cursor-pointer ${tx.type === 'Inflow' ? 'text-emerald-600' : 'text-foreground'}`}
+                            className={`font-medium cursor-pointer ${tx.type === 'Inflow' ? 'text-emerald-600' : tx.type === 'Transfer' ? 'text-blue-500' : 'text-foreground'}`}
                             onDoubleClick={() => startEdit(tx)}
                           >
-                            {tx.type === 'Inflow' ? '+' : '-'}{formatAmount(tx.amount, tx.currency)}
+                            {tx.type === 'Inflow' ? '+' : tx.type === 'Transfer' ? '↔' : '-'}{formatAmount(tx.amount, tx.currency)}
                           </span>
                         )}
                       </td>
@@ -457,9 +459,10 @@ const TransactionTable: React.FC<Props> = ({ transactions, selectedAccount, onRe
                           <select value={editData.type ?? ''} onChange={(e) => setEditData((p) => ({ ...p, type: e.target.value as TransactionType }))} className={selectClass}>
                             <option value="Inflow">Inflow</option>
                             <option value="Outflow">Outflow</option>
+                            <option value="Transfer">Transfer</option>
                           </select>
                         ) : (
-                          <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${tx.type === 'Inflow' ? 'bg-emerald-500/10 text-emerald-600' : 'bg-destructive/10 text-destructive'}`}>
+                          <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${tx.type === 'Inflow' ? 'bg-emerald-500/10 text-emerald-600' : tx.type === 'Transfer' ? 'bg-blue-500/10 text-blue-500' : 'bg-destructive/10 text-destructive'}`}>
                             {tx.type}
                           </span>
                         )}

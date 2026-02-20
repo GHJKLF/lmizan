@@ -15,6 +15,7 @@ function fromStripeAmount(amount: number, currency: string): number {
 }
 
 function mapType(txType: string, net: number): string {
+  if (txType === "payout") return "Transfer";
   return net >= 0 ? "Inflow" : "Outflow";
 }
 
