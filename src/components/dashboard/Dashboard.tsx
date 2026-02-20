@@ -83,7 +83,7 @@ const Dashboard: React.FC<Props> = ({ dashboardData, transactions, selectedAccou
   if (!dashboardData) return null;
 
   if (selectedAccount !== 'ALL') {
-    if (txLoading || transactions.length === 0) {
+    if (txLoading) {
       return (
         <div className="flex items-center justify-center h-64">
           <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
