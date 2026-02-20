@@ -1,72 +1,91 @@
 
 
-## Fix Duplicate Transactions Across All Sync Functions
+## Phase 5: Equity / Balance Sheet Dashboard
 
-### Problem
-All sync functions use `crypto.randomUUID()` for transaction IDs, meaning every sync run creates new rows instead of deduplicating. This caused 3-4x duplication across Wise and Stripe accounts, inflating P&L figures.
+### Overview
+Add a new "Equity" page accessible from the sidebar, providing a full balance-sheet view with Total Assets, Liabilities (VAT + Disputes), Net Worth, and an asset breakdown table.
 
 ### Changes
 
-### 1. `supabase/functions/wise-sync/index.ts`
+#### 1. Add `EQUITY` to ViewState type
+**File:** `src/types/index.ts`
+- Add `'EQUITY'` to the `ViewState` union type
 
-**Statement path (lines 184-223):**
-- Remove the `existingTxs` query and `existingRefs` Set construction (lines 184-197)
-- Change `id: crypto.randomUUID()` to `id: "wise-" + refNumber` (line 208)
-- Remove `_wise_ref` field from mapped objects
-- Remove the `.filter()` call that uses `existingRefs` (line 223)
-- Change `.insert(chunk)` to `.upsert(chunk, { onConflict: 'id', ignoreDuplicates: true })`
+#### 2. Create Equity page component
+**File:** `src/components/equity/EquityDashboard.tsx` (new)
 
-**Transfers path (lines 244-283):**
-- Remove the `existingTxs` query and `existingIds` Set construction (lines 244-257)
-- Change `id: crypto.randomUUID()` to `id: "wise-transfer-" + tr.id` (line 268)
-- Remove `_wise_id` field from mapped objects
-- Remove the `.filter()` call that uses `existingIds` (line 283)
-- Same upsert change for insert
+Three sections:
 
-**Cleanup:** Remove the `_wise_id`/`_wise_ref` stripping from `payloads` map (line 288) since those fields no longer exist.
+**Section 1 - Balance Sheet Summary (4 cards row)**
+- Total Assets: sum of all account balance_eur from dashboardData.accountBalances
+- Total Liabilities: VAT Payable + Disputes Reserve (fetched via useQuery)
+- Net Worth: Assets minus Liabilities
+- Liabilities/Assets ratio: percentage
 
-### 2. `supabase/functions/wise-webhook/index.ts`
+**Section 2 - Liabilities Breakdown (2 cards side by side)**
+- Card A: VAT Payable - useQuery fetching sum of EUR inflow transactions from last 12 months, multiply by 0.21
+- Card B: Disputes Reserve - useQuery fetching outflow transactions where description matches dispute/chargeback/reversal patterns, last 12 months
 
-- Change `id: crypto.randomUUID()` (line 112) to a deterministic ID: `id: "wise-wh-" + (data.transfer_reference || crypto.randomUUID())`
-- Change `.insert(tx)` (line 126) to `.upsert(tx, { onConflict: 'id', ignoreDuplicates: true })`
+**Section 3 - Asset Breakdown Table**
+- Reuse accountBalances from dashboardData
+- Table columns: Account, Currency, Balance (native), Balance (EUR), % of Total, Tier
+- Sorted by EUR balance descending
 
-### 3. `supabase/functions/stripe-sync/index.ts`
+Data fetching approach:
+- Account balances: passed as prop from Index.tsx (dashboardData.accountBalances)
+- VAT and disputes: two separate useQuery hooks with direct Supabase queries on the transactions table
 
-- Remove the entire `existingIds` preload loop (lines 82-100)
-- Change `id: crypto.randomUUID()` to `id: "stripe-" + bt.id` in `mapBt()` (line 115)
-- Remove `_stripe_id` field from `mapBt()` return
-- In `insertPage()`: remove the `existingIds` filtering (line 134), remove `_stripe_id` stripping (line 137), change `.insert(chunk)` to `.upsert(chunk, { onConflict: 'id', ignoreDuplicates: true })`, remove the `existingIds.add()` tracking (lines 146-148)
+#### 3. Add sidebar nav item
+**File:** `src/components/AppSidebar.tsx`
+- Add "Equity" nav item with `Scale` icon between P&L and Transactions
+- Wire to `onNavigate('EQUITY')`
 
-### 4. `supabase/functions/process-sync-chunk/index.ts`
+#### 4. Add Equity view rendering in Index
+**File:** `src/pages/Index.tsx`
+- Add conditional rendering for `currentView === 'EQUITY'`
+- Pass `dashboardData` to EquityDashboard
 
-- Line 97: Change `ignoreDuplicates: false` to `ignoreDuplicates: true`
-
-### 5. Database Migration: Deduplicate Existing Rows
-
-Create a new migration that removes duplicate transactions, keeping only the earliest row per unique `(user_id, notes)`:
-
-```sql
-DELETE FROM transactions
-WHERE id IN (
-  SELECT id FROM (
-    SELECT id, ROW_NUMBER() OVER (
-      PARTITION BY user_id, notes
-      ORDER BY created_at ASC
-    ) AS rn
-    FROM transactions
-    WHERE notes IS NOT NULL AND notes != ''
-  ) ranked
-  WHERE rn > 1
-);
-```
+#### 5. Styling
+- Match existing dark card style from Dashboard/LiquidityHeader
+- Use Card/CardContent components, same typography and spacing
+- Use `formatEUR` helper from balanceEngine
 
 ### Technical Details
 
-| File | Change Summary |
-|------|---------------|
-| `supabase/functions/wise-sync/index.ts` | Deterministic IDs (`wise-{ref}`), remove preload dedup, use upsert |
-| `supabase/functions/wise-webhook/index.ts` | Deterministic ID, use upsert |
-| `supabase/functions/stripe-sync/index.ts` | Deterministic IDs (`stripe-{bt.id}`), remove preload dedup, use upsert |
-| `supabase/functions/process-sync-chunk/index.ts` | Set `ignoreDuplicates: true` |
-| `supabase/migrations/[timestamp].sql` | Deduplicate existing rows |
+| File | Change |
+|------|--------|
+| `src/types/index.ts` | Add `'EQUITY'` to ViewState union |
+| `src/components/equity/EquityDashboard.tsx` | New component with 3 sections |
+| `src/components/AppSidebar.tsx` | Add Equity nav item with Scale icon |
+| `src/pages/Index.tsx` | Render EquityDashboard when view is EQUITY |
+
+**Supabase queries for liabilities:**
+
+VAT query:
+```sql
+SELECT COALESCE(SUM(amount), 0) as total
+FROM transactions
+WHERE user_id = auth.uid()
+  AND type = 'Inflow'
+  AND currency = 'EUR'
+  AND date >= (CURRENT_DATE - INTERVAL '12 months')
+```
+
+Disputes query:
+```sql
+SELECT COUNT(*) as count, COALESCE(SUM(amount), 0) as total
+FROM transactions
+WHERE user_id = auth.uid()
+  AND type = 'Outflow'
+  AND date >= (CURRENT_DATE - INTERVAL '12 months')
+  AND (LOWER(description) LIKE '%dispute%'
+    OR LOWER(description) LIKE '%chargeback%'
+    OR LOWER(description) LIKE '%reversal%')
+```
+
+Both queries will use the Supabase JS client with `.select()` and filters, or `.rpc()` if needed. Since Supabase JS filters don't support OR on LIKE patterns easily, we'll use two approaches:
+- VAT: straightforward `.from('transactions').select('amount').eq('type','Inflow').eq('currency','EUR').gte('date', cutoffDate)` then sum client-side
+- Disputes: fetch with `.or('description.ilike.%dispute%,description.ilike.%chargeback%,description.ilike.%reversal%')` filter then sum client-side
+
+No database migrations or new RPC functions needed.
 
