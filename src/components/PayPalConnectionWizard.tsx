@@ -107,12 +107,22 @@ const PayPalConnectionWizard: React.FC<Props> = ({ isOpen, onClose, onSuccess })
       toast.success('PayPal account connected! Syncing transactions...');
 
       // Insert into accounts table so it appears in sidebar
-      try {
-        await supabase.from('accounts').insert(
-          { name: accountName.trim() || 'PayPal', user_id: user.id }
+      const acctName = accountName.trim() || 'PayPal';
+      const { error: acctError } = await supabase
+        .from('accounts')
+        .upsert(
+          { name: acctName, user_id: user.id },
+          { onConflict: 'name,user_id', ignoreDuplicates: true }
         );
-      } catch {
-        // Ignore duplicate — account already exists
+      if (acctError) {
+        console.warn('accounts upsert fallback:', acctError.message);
+        // Fallback: plain insert (ignore duplicate errors)
+        const { error: fallbackErr } = await supabase
+          .from('accounts')
+          .insert({ name: acctName, user_id: user.id });
+        if (fallbackErr && !fallbackErr.message?.includes('duplicate')) {
+          console.error('Failed to insert account:', fallbackErr.message);
+        }
       }
 
       // Trigger initial sync
