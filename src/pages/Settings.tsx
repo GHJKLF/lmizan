@@ -889,17 +889,7 @@ const Settings: React.FC = () => {
                     className="w-full px-3 py-2 text-xs bg-background border border-border rounded-lg text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
                   />
                 </div>
-                <div>
-                  <label className="text-xs text-muted-foreground block mb-1">Client ID *</label>
-                  <input
-                    type="text"
-                    value={airwallexForm.client_id}
-                    onChange={e => setAirwallexForm(f => ({ ...f, client_id: e.target.value }))}
-                    placeholder="Airwallex Client ID"
-                    className="w-full px-3 py-2 text-xs bg-background border border-border rounded-lg text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
-                  />
-                </div>
-                <div>
+                <div className="col-span-2">
                   <label className="text-xs text-muted-foreground block mb-1">API Key *</label>
                   <input
                     type="password"
