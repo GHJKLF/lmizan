@@ -14,6 +14,7 @@ import EquityTrendChart from './EquityTrendChart';
 import CashFlowWaterfall from './CashFlowWaterfall';
 import AccountBreakdown from './AccountBreakdown';
 import AccountDashboard from './AccountDashboard';
+import AnomalySection from './AnomalySection';
 import { Loader2 } from 'lucide-react';
 
 interface Props {
@@ -23,6 +24,7 @@ interface Props {
   onSelectAccount: (account: string | 'ALL') => void;
   loading: boolean;
   txLoading: boolean;
+  anomalyRefreshKey: number;
 }
 
 // Derive LiquiditySnapshot from pre-computed account balances
@@ -65,7 +67,7 @@ const computeBreakdownFromBalances = (balances: DashboardAccountBalance[]): Acco
     .sort((a, b) => Math.abs(b.balanceEUR) - Math.abs(a.balanceEUR));
 };
 
-const Dashboard: React.FC<Props> = ({ dashboardData, transactions, selectedAccount, onSelectAccount, loading, txLoading }) => {
+const Dashboard: React.FC<Props> = ({ dashboardData, transactions, selectedAccount, onSelectAccount, loading, txLoading, anomalyRefreshKey }) => {
   // For single-account drill-down, we still need transactions
   const accountSummaries = useMemo(() => {
     if (selectedAccount === 'ALL' || transactions.length === 0) return [];
@@ -113,6 +115,8 @@ const Dashboard: React.FC<Props> = ({ dashboardData, transactions, selectedAccou
       </div>
 
       <AccountBreakdown data={accountBreakdown} onSelectAccount={onSelectAccount} />
+
+      <AnomalySection refreshKey={anomalyRefreshKey} />
     </div>
   );
 };

@@ -12,7 +12,7 @@ import UpdateBalanceModal from '@/components/modals/UpdateBalanceModal';
 import SettingsModal from '@/components/modals/SettingsModal';
 import PayoutReconciler from '@/components/modals/PayoutReconciler';
 import SyncProgress from '@/components/SyncProgress';
-import { Upload, Scale, ArrowLeftRight, RefreshCw, Loader2, ChevronDown } from 'lucide-react';
+import { Upload, Scale, ArrowLeftRight, RefreshCw, Loader2, ChevronDown, ShieldAlert } from 'lucide-react';
 import { toast } from 'sonner';
 
 const Index: React.FC = () => {
@@ -34,6 +34,8 @@ const Index: React.FC = () => {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [reconcilerOpen, setReconcilerOpen] = useState(false);
   const [syncing, setSyncing] = useState(false);
+  const [anomalyRefreshKey, setAnomalyRefreshKey] = useState(0);
+  const [runningAnomalyCheck, setRunningAnomalyCheck] = useState(false);
   const [syncMenuOpen, setSyncMenuOpen] = useState(false);
   const syncMenuRef = useRef<HTMLDivElement>(null);
   const [runningSessions, setRunningSessions] = useState<
@@ -280,6 +282,25 @@ const Index: React.FC = () => {
             )}
           </div>
           <button
+            onClick={async () => {
+              setRunningAnomalyCheck(true);
+              try {
+                const result = await DataService.runAnomalyDetection();
+                toast.success(`Anomaly check: ${result.checked} accounts checked, ${result.anomalies_found} found, ${result.auto_resolved} auto-resolved`);
+                setAnomalyRefreshKey(k => k + 1);
+              } catch (e: any) {
+                toast.error(e.message || 'Anomaly check failed');
+              } finally {
+                setRunningAnomalyCheck(false);
+              }
+            }}
+            disabled={runningAnomalyCheck}
+            className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-foreground border border-border hover:bg-accent rounded-lg transition-colors disabled:opacity-50"
+          >
+            {runningAnomalyCheck ? <Loader2 size={14} className="animate-spin" /> : <ShieldAlert size={14} />}
+            Anomaly Check
+          </button>
+          <button
             onClick={() => setReconcilerOpen(true)}
             className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-foreground border border-border hover:bg-accent rounded-lg transition-colors"
           >
@@ -310,6 +331,7 @@ const Index: React.FC = () => {
             onSelectAccount={setSelectedAccount}
             loading={dashboardLoading}
             txLoading={accountTxLoading}
+            anomalyRefreshKey={anomalyRefreshKey}
           />
         )}
 

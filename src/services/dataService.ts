@@ -290,6 +290,34 @@ export const DataService = {
     return true;
   },
 
+  async runAnomalyDetection(): Promise<{ checked: number; anomalies_found: number; auto_resolved: number }> {
+    const { data, error } = await supabase.rpc('run_anomaly_detection' as any);
+    if (error) throw error;
+    return data as any;
+  },
+
+  async fetchAnomalies(showAll: boolean = false): Promise<any[]> {
+    let query = supabase
+      .from('account_anomalies' as any)
+      .select('*')
+      .order('detected_date', { ascending: false })
+      .order('severity', { ascending: true });
+    if (!showAll) {
+      query = query.eq('status', 'open');
+    }
+    const { data, error } = await query;
+    if (error) throw error;
+    return (data || []) as any[];
+  },
+
+  async updateAnomalyStatus(id: string, status: 'dismissed' | 'expected' | 'resolved'): Promise<void> {
+    const { error } = await supabase
+      .from('account_anomalies' as any)
+      .update({ status } as any)
+      .eq('id', id);
+    if (error) throw error;
+  },
+
   async factoryReset(): Promise<void> {
     localStorage.removeItem(LS_TX_KEY);
     localStorage.removeItem(LS_ACCOUNTS_KEY);
