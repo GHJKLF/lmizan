@@ -28,7 +28,17 @@ const PnlReport: React.FC = () => {
   useEffect(() => {
     setLoading(true);
     DataService.fetchPnlReport(year)
-      .then((d) => setData(d.map((r: any) => ({ ...r, gross_revenue_eur: Number(r.gross_revenue_eur), net_revenue_eur: Number(r.net_revenue_eur), cogs_eur: Number(r.cogs_eur), gross_profit_eur: Number(r.gross_profit_eur), variable_costs_eur: Number(r.variable_costs_eur), contribution_margin_eur: Number(r.contribution_margin_eur), opex_eur: Number(r.opex_eur), ebitda_eur: Number(r.ebitda_eur), transaction_count: Number(r.transaction_count) }))))
+      .then((d) => {
+        const rows = d.map((r: any) => ({ ...r, gross_revenue_eur: Number(r.gross_revenue_eur), net_revenue_eur: Number(r.net_revenue_eur), cogs_eur: Number(r.cogs_eur), gross_profit_eur: Number(r.gross_profit_eur), variable_costs_eur: Number(r.variable_costs_eur), contribution_margin_eur: Number(r.contribution_margin_eur), opex_eur: Number(r.opex_eur), ebitda_eur: Number(r.ebitda_eur), transaction_count: Number(r.transaction_count) }));
+        // Fill missing months with zeros
+        const byMonth = new Map(rows.map((r: PnlMonth) => [r.month, r]));
+        const filled: PnlMonth[] = [];
+        for (let m = 1; m <= 12; m++) {
+          const key = `${year}-${String(m).padStart(2, '0')}`;
+          filled.push(byMonth.get(key) || { month: key, gross_revenue_eur: 0, net_revenue_eur: 0, cogs_eur: 0, gross_profit_eur: 0, variable_costs_eur: 0, contribution_margin_eur: 0, opex_eur: 0, ebitda_eur: 0, transaction_count: 0 });
+        }
+        setData(filled);
+      })
       .catch(console.error)
       .finally(() => setLoading(false));
   }, [year]);
