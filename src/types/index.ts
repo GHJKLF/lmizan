@@ -70,3 +70,18 @@ export interface DashboardData {
   equityTrend: DashboardEquityPoint[];
   monthlyFlows: DashboardMonthlyFlow[];
 }
+
+export interface AccountAnomaly {
+  id: string;
+  account: string;
+  detected_date: string;
+  expected_balance: number;
+  actual_balance: number;
+  gap_amount: number;
+  gap_percent: number | null;
+  severity: 'warning' | 'alert' | 'critical';
+  status: 'open' | 'expected' | 'resolved' | 'dismissed';
+  auto_resolve_reason: string | null;
+  notes: string | null;
+  created_at: string;
+}

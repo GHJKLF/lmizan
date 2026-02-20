@@ -14,6 +14,54 @@ export type Database = {
   }
   public: {
     Tables: {
+      account_anomalies: {
+        Row: {
+          account: string
+          actual_balance: number
+          auto_resolve_reason: string | null
+          created_at: string
+          detected_date: string
+          expected_balance: number
+          gap_amount: number
+          gap_percent: number | null
+          id: string
+          notes: string | null
+          severity: string
+          status: string
+          user_id: string
+        }
+        Insert: {
+          account: string
+          actual_balance: number
+          auto_resolve_reason?: string | null
+          created_at?: string
+          detected_date: string
+          expected_balance: number
+          gap_amount: number
+          gap_percent?: number | null
+          id?: string
+          notes?: string | null
+          severity: string
+          status?: string
+          user_id: string
+        }
+        Update: {
+          account?: string
+          actual_balance?: number
+          auto_resolve_reason?: string | null
+          created_at?: string
+          detected_date?: string
+          expected_balance?: number
+          gap_amount?: number
+          gap_percent?: number | null
+          id?: string
+          notes?: string | null
+          severity?: string
+          status?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       accounts: {
         Row: {
           created_at: string | null
@@ -580,6 +628,7 @@ export type Database = {
           webhook_secret: string
         }[]
       }
+      run_anomaly_detection: { Args: { p_date?: string }; Returns: Json }
       update_sync_session_progress: {
         Args: { p_session_id: string }
         Returns: undefined
