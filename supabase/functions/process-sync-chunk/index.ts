@@ -94,7 +94,7 @@ Deno.serve(async (req) => {
       const batch = transactions.slice(i, i + batchSize);
       const { error: upsertErr } = await adminClient
         .from("transactions")
-        .upsert(batch, { onConflict: "id", ignoreDuplicates: false });
+        .upsert(batch, { onConflict: "id", ignoreDuplicates: true });
       if (upsertErr) {
         console.error("Upsert error:", upsertErr.message);
       }
