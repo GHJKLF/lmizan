@@ -6,6 +6,13 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
+class ResultSetTooLargeError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "ResultSetTooLargeError";
+  }
+}
+
 async function getPayPalToken(clientId: string, clientSecret: string, env: string): Promise<string> {
   const base = env === "sandbox" ? "https://api-m.sandbox.paypal.com" : "https://api-m.paypal.com";
   const res = await fetch(`${base}/v1/oauth2/token`, {
@@ -37,6 +44,9 @@ async function fetchTransactionPage(
   });
   if (!res.ok) {
     const errText = await res.text();
+    if (res.status === 400 && errText.includes("RESULTSET_TOO_LARGE")) {
+      throw new ResultSetTooLargeError(errText);
+    }
     throw new Error(`PayPal Transactions API error [${res.status}]: ${errText}`);
   }
   const data = await res.json();
@@ -60,7 +70,6 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Dual-mode auth: user session OR service-role key (for scheduler)
     let isSchedulerCall = false;
 
     const supabaseUser = createClient(
@@ -72,7 +81,6 @@ Deno.serve(async (req) => {
     const { data: { user }, error: userErr } = await supabaseUser.auth.getUser();
 
     if (userErr || !user) {
-      // Check if this is a service-role call from the scheduler
       const token = authHeader.replace("Bearer ", "");
       const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
       if (token === serviceRoleKey) {
@@ -109,7 +117,6 @@ Deno.serve(async (req) => {
       );
     }
 
-    // For user-initiated calls, verify ownership
     if (!isSchedulerCall && user!.id !== conn.user_id) {
       return new Response(JSON.stringify({ error: "Forbidden" }), {
         status: 403,
@@ -124,37 +131,63 @@ Deno.serve(async (req) => {
     const now = new Date();
     const intervalEnd = now.toISOString();
 
-    // First sync (last_synced_at is null) ALWAYS does full 3-year sync
     const isFirstSync = !conn.last_synced_at;
     const intervalStart = (full_sync || isFirstSync)
       ? new Date(Date.now() - (2 * 365 + 335) * 24 * 60 * 60 * 1000).toISOString()
       : new Date(conn.last_synced_at).toISOString();
 
-    // Build 31-day chunks
+    // Build 7-day chunks (reduced from 31 to avoid RESULTSET_TOO_LARGE)
+    const CHUNK_DAYS = 7;
     const chunks: { start: string; end: string }[] = [];
     let chunkStart = new Date(intervalStart);
     const endDate = new Date(intervalEnd);
     while (chunkStart < endDate) {
       const chunkEnd = new Date(chunkStart);
-      chunkEnd.setDate(chunkEnd.getDate() + 31);
+      chunkEnd.setDate(chunkEnd.getDate() + CHUNK_DAYS);
       if (chunkEnd > endDate) chunkEnd.setTime(endDate.getTime());
       chunks.push({ start: chunkStart.toISOString(), end: chunkEnd.toISOString() });
       chunkStart = new Date(chunkEnd);
     }
 
-    // Fetch all transactions across chunks
+    // Fetch all transactions with adaptive subdivision
     const allTxDetails: any[] = [];
-    for (const chunk of chunks) {
-      let page = 1;
-      while (true) {
-        const result = await fetchTransactionPage(base, token, chunk.start, chunk.end, page);
-        allTxDetails.push(...result.transactions);
-        if (page >= result.totalPages) break;
-        page++;
+    const queue = [...chunks];
+
+    while (queue.length > 0) {
+      const chunk = queue.shift()!;
+      try {
+        let page = 1;
+        while (true) {
+          const result = await fetchTransactionPage(base, token, chunk.start, chunk.end, page);
+          allTxDetails.push(...result.transactions);
+          if (page >= result.totalPages) break;
+          page++;
+        }
+      } catch (err) {
+        if (err instanceof ResultSetTooLargeError) {
+          const startMs = new Date(chunk.start).getTime();
+          const endMs = new Date(chunk.end).getTime();
+          const diffMs = endMs - startMs;
+
+          // Safety floor: don't split below ~1 day (24h in ms)
+          if (diffMs <= 24 * 60 * 60 * 1000) {
+            throw new Error(`RESULTSET_TOO_LARGE even for a 1-day chunk (${chunk.start} to ${chunk.end}). Too many transactions in a single day.`);
+          }
+
+          const midMs = startMs + Math.floor(diffMs / 2);
+          const mid = new Date(midMs).toISOString();
+          console.log(`Splitting chunk [${chunk.start} - ${chunk.end}] at ${mid}`);
+          queue.unshift(
+            { start: chunk.start, end: mid },
+            { start: mid, end: chunk.end }
+          );
+        } else {
+          throw err;
+        }
       }
     }
 
-    console.log(`PayPal sync: chunks=${chunks.length} fetched=${allTxDetails.length} range=${intervalStart} to ${intervalEnd}`);
+    console.log(`PayPal sync: initial_chunks=${chunks.length} fetched=${allTxDetails.length} range=${intervalStart} to ${intervalEnd}`);
 
     if (allTxDetails.length === 0) {
       await supabaseAdmin

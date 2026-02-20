@@ -233,6 +233,53 @@ async function fetchPaypal(job: any, conn: any) {
   });
   if (!txRes.ok) {
     const body = await txRes.text();
+    // Detect RESULTSET_TOO_LARGE: split job in half and re-queue
+    if (txRes.status === 400 && body.includes("RESULTSET_TOO_LARGE")) {
+      const startMs = new Date(job.chunk_start).getTime();
+      const endMs = new Date(job.chunk_end).getTime();
+      const diffMs = endMs - startMs;
+
+      if (diffMs <= 24 * 60 * 60 * 1000) {
+        throw new Error(`RESULTSET_TOO_LARGE even for a 1-day chunk (${job.chunk_start} to ${job.chunk_end})`);
+      }
+
+      const midMs = startMs + Math.floor(diffMs / 2);
+      const mid = new Date(midMs).toISOString();
+      console.log(`PayPal RESULTSET_TOO_LARGE: splitting job ${job.id} at ${mid}`);
+
+      // Shrink current job to first half (will be re-processed)
+      const adminClient = createClient(
+        Deno.env.get("SUPABASE_URL")!,
+        Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
+      );
+      await adminClient.from("sync_jobs").update({
+        chunk_end: mid,
+        status: "pending",
+        started_at: null,
+        cursor: null,
+      }).eq("id", job.id);
+
+      // Create new job for second half
+      await adminClient.from("sync_jobs").insert({
+        user_id: job.user_id,
+        connection_id: job.connection_id,
+        provider: job.provider,
+        job_type: job.job_type,
+        chunk_start: mid,
+        chunk_end: job.chunk_end,
+        session_id: job.session_id,
+        priority: job.priority,
+        status: "pending",
+      });
+
+      // Update session to reflect the new chunk count
+      if (job.session_id) {
+        await adminClient.rpc("update_sync_session_progress", { p_session_id: job.session_id });
+      }
+
+      // Return empty so the caller marks no records and the job re-queues
+      return { transactions: [], nextCursor: null };
+    }
     throw new Error(`PayPal Transactions API ${txRes.status}: ${body}`);
   }
   const txData = await txRes.json();
