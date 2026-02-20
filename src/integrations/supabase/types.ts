@@ -610,7 +610,6 @@ export type Database = {
           month: string
           net_revenue_eur: number
           opex_eur: number
-          revenue_by_currency: Json
           transaction_count: number
           variable_costs_eur: number
         }[]

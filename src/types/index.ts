@@ -27,7 +27,6 @@ export interface PnlMonth {
   opex_eur: number;
   ebitda_eur: number;
   transaction_count: number;
-  revenue_by_currency: Record<string, number>;
 }
 
 export interface Transaction {
