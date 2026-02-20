@@ -5,7 +5,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Skeleton } from '@/components/ui/skeleton';
 import { DataService } from '@/services/dataService';
 import { PnlMonth } from '@/types';
-import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { TrendingUp, TrendingDown, DollarSign, Calendar, Download } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
@@ -28,7 +28,7 @@ const PnlReport: React.FC = () => {
   useEffect(() => {
     setLoading(true);
     DataService.fetchPnlReport(year)
-      .then((d) => setData(d.map((r: any) => ({ ...r, gross_revenue_eur: Number(r.gross_revenue_eur), net_revenue_eur: Number(r.net_revenue_eur), cogs_eur: Number(r.cogs_eur), gross_profit_eur: Number(r.gross_profit_eur), variable_costs_eur: Number(r.variable_costs_eur), contribution_margin_eur: Number(r.contribution_margin_eur), opex_eur: Number(r.opex_eur), ebitda_eur: Number(r.ebitda_eur), transaction_count: Number(r.transaction_count), revenue_by_currency: r.revenue_by_currency || {} }))))
+      .then((d) => setData(d.map((r: any) => ({ ...r, gross_revenue_eur: Number(r.gross_revenue_eur), net_revenue_eur: Number(r.net_revenue_eur), cogs_eur: Number(r.cogs_eur), gross_profit_eur: Number(r.gross_profit_eur), variable_costs_eur: Number(r.variable_costs_eur), contribution_margin_eur: Number(r.contribution_margin_eur), opex_eur: Number(r.opex_eur), ebitda_eur: Number(r.ebitda_eur), transaction_count: Number(r.transaction_count) }))))
       .catch(console.error)
       .finally(() => setLoading(false));
   }, [year]);
@@ -46,22 +46,8 @@ const PnlReport: React.FC = () => {
 
   const ebitdaMargin = totals.net > 0 ? (totals.ebitda / totals.net) * 100 : 0;
 
-  // Build currency chart data
-  const currencyChartData = useMemo(() => {
-    const currencies = new Set<string>();
-    data.forEach((m) => Object.keys(m.revenue_by_currency).forEach((c) => currencies.add(c)));
-    return data.map((m) => {
-      const row: any = { month: m.month.slice(5) };
-      currencies.forEach((c) => { row[c] = Math.round((m.revenue_by_currency[c] || 0) * ({ EUR: 1, USD: 0.92, HKD: 0.118, GBP: 1.17 }[c] || 1)); });
-      return row;
-    });
-  }, [data]);
+  // EBITDA chart data only (revenue by currency removed for performance)
 
-  const allCurrencies = useMemo(() => {
-    const s = new Set<string>();
-    data.forEach((m) => Object.keys(m.revenue_by_currency).forEach((c) => s.add(c)));
-    return Array.from(s).sort();
-  }, [data]);
 
   if (loading) {
     return (
@@ -252,47 +238,23 @@ const PnlReport: React.FC = () => {
         </CardContent>
       </Card>
 
-      {/* Charts */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        {/* Revenue by Currency */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Revenue by Currency (EUR equiv.)</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <ResponsiveContainer width="100%" height={280}>
-              <BarChart data={currencyChartData}>
-                <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
-                <XAxis dataKey="month" className="text-xs" />
-                <YAxis className="text-xs" />
-                <Tooltip formatter={(v: number) => fmt(v)} />
-                <Legend />
-                {allCurrencies.map((c) => (
-                  <Bar key={c} dataKey={c} stackId="rev" fill={CURRENCY_COLORS[c] || 'hsl(var(--chart-2))'} />
-                ))}
-              </BarChart>
-            </ResponsiveContainer>
-          </CardContent>
-        </Card>
-
-        {/* EBITDA Trend */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">EBITDA Trend</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <ResponsiveContainer width="100%" height={280}>
-              <LineChart data={data.map((m) => ({ month: m.month.slice(5), ebitda: m.ebitda_eur }))}>
-                <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
-                <XAxis dataKey="month" className="text-xs" />
-                <YAxis className="text-xs" />
-                <Tooltip formatter={(v: number) => fmt(v)} />
-                <Line type="monotone" dataKey="ebitda" stroke="hsl(var(--chart-1))" strokeWidth={2} dot={{ r: 4 }} />
-              </LineChart>
-            </ResponsiveContainer>
-          </CardContent>
-        </Card>
-      </div>
+      {/* EBITDA Trend */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">EBITDA Trend</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <ResponsiveContainer width="100%" height={280}>
+            <LineChart data={data.map((m) => ({ month: m.month.slice(5), ebitda: m.ebitda_eur }))}>
+              <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
+              <XAxis dataKey="month" className="text-xs" />
+              <YAxis className="text-xs" />
+              <Tooltip formatter={(v: number) => fmt(v)} />
+              <Line type="monotone" dataKey="ebitda" stroke="hsl(var(--chart-1))" strokeWidth={2} dot={{ r: 4 }} />
+            </LineChart>
+          </ResponsiveContainer>
+        </CardContent>
+      </Card>
     </div>
   );
 };
