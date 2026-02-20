@@ -14,6 +14,9 @@ import {
   CreditCard,
   Zap,
   Database,
+  Globe,
+  Plus,
+  X,
 } from 'lucide-react';
 import {
   AlertDialog,
@@ -65,6 +68,17 @@ interface StripeConnection {
   created_at: string;
 }
 
+interface AirwallexConnection {
+  id: string;
+  account_name: string;
+  currency: string;
+  sync_start_date: string | null;
+  last_synced_at: string | null;
+  balance_available: number | null;
+  balance_fetched_at: string | null;
+  created_at: string;
+}
+
 interface WiseBalance {
   id: number;
   currency: string;
@@ -86,12 +100,14 @@ interface StripeBalance {
 }
 
 const STRIPE_COLOR = '#635bff';
+const AIRWALLEX_COLOR = '#0e6cc4';
 
 const Settings: React.FC = () => {
   const navigate = useNavigate();
   const [connections, setConnections] = useState<WiseConnection[]>([]);
   const [paypalConnections, setPaypalConnections] = useState<PayPalConnection[]>([]);
   const [stripeConnections, setStripeConnections] = useState<StripeConnection[]>([]);
+  const [airwallexConnections, setAirwallexConnections] = useState<AirwallexConnection[]>([]);
   const [loading, setLoading] = useState(true);
   const [syncingId, setSyncingId] = useState<string | null>(null);
   const [testingId, setTestingId] = useState<string | null>(null);
@@ -109,10 +125,22 @@ const Settings: React.FC = () => {
   const [accounts, setAccounts] = useState<{ id: number; name: string; created_at: string }[]>([]);
   const [deleteAccountConfirm, setDeleteAccountConfirm] = useState<{ open: boolean; id: number; name: string }>({ open: false, id: 0, name: '' });
 
+  // Airwallex state
+  const [airwallexSyncingId, setAirwallexSyncingId] = useState<string | null>(null);
+  const [airwallexFormOpen, setAirwallexFormOpen] = useState(false);
+  const [airwallexAdding, setAirwallexAdding] = useState(false);
+  const [airwallexForm, setAirwallexForm] = useState({
+    account_name: '',
+    client_id: '',
+    api_key: '',
+    currency: 'EUR',
+    sync_start_date: '',
+  });
+
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      const [wiseRes, paypalRes, stripeRes, accountsRes] = await Promise.all([
+      const [wiseRes, paypalRes, stripeRes, airwallexRes, accountsRes] = await Promise.all([
         supabase
           .from('wise_connections_safe' as any)
           .select('id, account_name, profile_id, balance_id, currency, last_synced_at, created_at')
@@ -126,6 +154,10 @@ const Settings: React.FC = () => {
           .select('id, account_name, stripe_account_id, email, currency, environment, last_synced_at, created_at')
           .order('created_at', { ascending: false }),
         supabase
+          .from('airwallex_connections_safe' as any)
+          .select('id, account_name, currency, sync_start_date, last_synced_at, balance_available, balance_fetched_at, created_at')
+          .order('created_at', { ascending: false }),
+        supabase
           .from('accounts')
           .select('id, name, created_at')
           .order('name', { ascending: true }),
@@ -133,6 +165,7 @@ const Settings: React.FC = () => {
       setConnections((wiseRes.data as unknown as WiseConnection[]) || []);
       setPaypalConnections((paypalRes.data as unknown as PayPalConnection[]) || []);
       setStripeConnections((stripeRes.data as unknown as StripeConnection[]) || []);
+      setAirwallexConnections((airwallexRes.data as unknown as AirwallexConnection[]) || []);
       setAccounts((accountsRes.data as any[]) || []);
     } catch (e) {
       console.error(e);
@@ -278,6 +311,59 @@ const Settings: React.FC = () => {
     } finally {
       setStripeBalancesLoading(null);
     }
+  };
+
+  // Airwallex handlers
+  const handleAirwallexAdd = async () => {
+    if (!airwallexForm.account_name || !airwallexForm.client_id || !airwallexForm.api_key) {
+      toast.error('Account Name, Client ID and API Key are required');
+      return;
+    }
+    setAirwallexAdding(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Not authenticated');
+      const { error } = await supabase.from('airwallex_connections' as any).insert({
+        user_id: user.id,
+        account_name: airwallexForm.account_name,
+        client_id: airwallexForm.client_id,
+        api_key: airwallexForm.api_key,
+        currency: airwallexForm.currency || 'EUR',
+        sync_start_date: airwallexForm.sync_start_date || null,
+      });
+      if (error) throw error;
+      toast.success('Airwallex connection added');
+      setAirwallexFormOpen(false);
+      setAirwallexForm({ account_name: '', client_id: '', api_key: '', currency: 'EUR', sync_start_date: '' });
+      await loadData();
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to add connection');
+    } finally {
+      setAirwallexAdding(false);
+    }
+  };
+
+  const handleAirwallexSync = async (id: string, fullSync = false) => {
+    setAirwallexSyncingId(id);
+    try {
+      const res = await supabase.functions.invoke('airwallex-sync', {
+        body: { connection_id: id, full_sync: fullSync },
+      });
+      if (res.error) throw res.error;
+      toast.success(`Airwallex synced: ${res.data?.synced ?? 0} new transactions`);
+      await loadData();
+    } catch (err: any) {
+      toast.error(err.message || 'Airwallex sync failed');
+    } finally {
+      setAirwallexSyncingId(null);
+    }
+  };
+
+  const handleAirwallexDelete = async (id: string) => {
+    if (!confirm('Delete this Airwallex connection?')) return;
+    const { error } = await supabase.from('airwallex_connections' as any).delete().eq('id', id);
+    if (error) toast.error('Failed to delete');
+    else { toast.success('Airwallex connection deleted'); await loadData(); }
   };
 
   return (
@@ -723,6 +809,187 @@ const Settings: React.FC = () => {
                     {/* Delete */}
                     <button
                       onClick={() => handleStripeDelete(conn.id)}
+                      className="p-2 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-lg transition-colors"
+                      title="Delete"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+
+        {/* Airwallex Integrations */}
+        <section className="mb-10">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-bold text-foreground flex items-center gap-2">
+              <Globe size={18} style={{ color: AIRWALLEX_COLOR }} />
+              Airwallex Integrations
+            </h2>
+            <button
+              onClick={() => setAirwallexFormOpen(!airwallexFormOpen)}
+              className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-white rounded-lg transition-opacity hover:opacity-90"
+              style={{ backgroundColor: AIRWALLEX_COLOR }}
+            >
+              {airwallexFormOpen ? <X size={14} /> : <Plus size={14} />}
+              {airwallexFormOpen ? 'Cancel' : 'Add Connection'}
+            </button>
+          </div>
+
+          {/* Add form */}
+          {airwallexFormOpen && (
+            <div className="mb-4 p-4 bg-card border border-border rounded-xl space-y-3">
+              <p className="text-xs font-semibold text-foreground">New Airwallex Connection</p>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs text-muted-foreground block mb-1">Account Name *</label>
+                  <input
+                    type="text"
+                    value={airwallexForm.account_name}
+                    onChange={e => setAirwallexForm(f => ({ ...f, account_name: e.target.value }))}
+                    placeholder="e.g. Airwallex Main"
+                    className="w-full px-3 py-2 text-xs bg-background border border-border rounded-lg text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs text-muted-foreground block mb-1">Currency</label>
+                  <input
+                    type="text"
+                    value={airwallexForm.currency}
+                    onChange={e => setAirwallexForm(f => ({ ...f, currency: e.target.value.toUpperCase() }))}
+                    placeholder="EUR"
+                    className="w-full px-3 py-2 text-xs bg-background border border-border rounded-lg text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs text-muted-foreground block mb-1">Client ID *</label>
+                  <input
+                    type="text"
+                    value={airwallexForm.client_id}
+                    onChange={e => setAirwallexForm(f => ({ ...f, client_id: e.target.value }))}
+                    placeholder="Airwallex Client ID"
+                    className="w-full px-3 py-2 text-xs bg-background border border-border rounded-lg text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs text-muted-foreground block mb-1">API Key *</label>
+                  <input
+                    type="password"
+                    value={airwallexForm.api_key}
+                    onChange={e => setAirwallexForm(f => ({ ...f, api_key: e.target.value }))}
+                    placeholder="Airwallex API Key"
+                    className="w-full px-3 py-2 text-xs bg-background border border-border rounded-lg text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+                  />
+                </div>
+                <div className="col-span-2">
+                  <label className="text-xs text-muted-foreground block mb-1">Sync Start Date (optional)</label>
+                  <input
+                    type="date"
+                    value={airwallexForm.sync_start_date}
+                    onChange={e => setAirwallexForm(f => ({ ...f, sync_start_date: e.target.value }))}
+                    className="w-full px-3 py-2 text-xs bg-background border border-border rounded-lg text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+                  />
+                </div>
+              </div>
+              <button
+                onClick={handleAirwallexAdd}
+                disabled={airwallexAdding}
+                className="flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white rounded-lg transition-opacity hover:opacity-90 disabled:opacity-50"
+                style={{ backgroundColor: AIRWALLEX_COLOR }}
+              >
+                {airwallexAdding ? <Loader2 size={12} className="animate-spin" /> : <Plus size={12} />}
+                {airwallexAdding ? 'Adding...' : 'Add Connection'}
+              </button>
+            </div>
+          )}
+
+          {loading ? (
+            <div className="flex justify-center py-12">
+              <Loader2 className="animate-spin text-muted-foreground" size={24} />
+            </div>
+          ) : airwallexConnections.length === 0 && !airwallexFormOpen ? (
+            <div className="text-center py-12 text-muted-foreground border border-dashed border-border rounded-xl">
+              <Globe size={32} className="mx-auto mb-3 opacity-40" />
+              <p className="text-sm">No Airwallex connections configured yet.</p>
+              <p className="text-xs mt-1">Add your Airwallex credentials to start syncing transactions.</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {airwallexConnections.map((conn) => (
+                <div
+                  key={conn.id}
+                  className="flex items-center justify-between p-4 bg-card border border-border rounded-xl"
+                >
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <Globe size={14} style={{ color: AIRWALLEX_COLOR }} />
+                      <span className="font-semibold text-foreground text-sm">{conn.account_name}</span>
+                      <span className="text-xs px-2 py-0.5 bg-accent rounded-full text-muted-foreground font-medium">
+                        {conn.currency}
+                      </span>
+                    </div>
+                    {conn.balance_available !== null && (
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Balance: {conn.balance_available.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {conn.currency}
+                        {conn.balance_fetched_at && (
+                          <span className="ml-1 opacity-60">· fetched {new Date(conn.balance_fetched_at).toLocaleDateString()}</span>
+                        )}
+                      </p>
+                    )}
+                    <p className="text-xs text-muted-foreground">
+                      Last synced: {conn.last_synced_at
+                        ? new Date(conn.last_synced_at).toLocaleString()
+                        : 'Never'}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-1.5 ml-3">
+                    {/* Sync with Full Sync dropdown */}
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <div className="flex items-center">
+                          <button
+                            onClick={() => handleAirwallexSync(conn.id, false)}
+                            disabled={airwallexSyncingId === conn.id}
+                            className="p-2 text-muted-foreground hover:bg-accent rounded-l-lg transition-colors disabled:opacity-50"
+                            title="Sync Now"
+                          >
+                            {airwallexSyncingId === conn.id ? (
+                              <Loader2 size={14} className="animate-spin" />
+                            ) : (
+                              <RefreshCw size={14} />
+                            )}
+                          </button>
+                          <button
+                            disabled={airwallexSyncingId === conn.id}
+                            className="p-2 text-muted-foreground hover:bg-accent rounded-r-lg transition-colors disabled:opacity-50 border-l border-border"
+                            title="Sync options"
+                          >
+                            <ChevronDown size={10} />
+                          </button>
+                        </div>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-44 p-1" align="end">
+                        <button
+                          onClick={() => handleAirwallexSync(conn.id, false)}
+                          disabled={airwallexSyncingId === conn.id}
+                          className="w-full text-left px-3 py-2 text-xs rounded-md hover:bg-accent text-foreground"
+                        >
+                          Sync (incremental)
+                        </button>
+                        <button
+                          onClick={() => handleAirwallexSync(conn.id, true)}
+                          disabled={airwallexSyncingId === conn.id}
+                          className="w-full text-left px-3 py-2 text-xs rounded-md hover:bg-accent text-foreground"
+                        >
+                          Full Sync (2 years)
+                        </button>
+                      </PopoverContent>
+                    </Popover>
+                    {/* Delete */}
+                    <button
+                      onClick={() => handleAirwallexDelete(conn.id)}
                       className="p-2 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-lg transition-colors"
                       title="Delete"
                     >

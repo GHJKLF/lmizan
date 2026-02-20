@@ -50,3 +50,6 @@ verify_jwt = false
 
 [functions.handle-webhook]
 verify_jwt = false
+
+[functions.airwallex-sync]
+verify_jwt = false
