@@ -99,7 +99,7 @@ export const computeAccountSummaries = (transactions: Transaction[]): AccountSum
     } else {
       // Compute from transaction history
       txs.forEach((tx) => {
-        if (tx.type === 'Transfer') return; // Transfers don't affect balance
+        if (tx.type === 'Transfer') { total -= tx.amount; return; }
         if (tx.type === 'Inflow') total += tx.amount;
         else total -= tx.amount;
       });
