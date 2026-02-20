@@ -521,13 +521,21 @@ export type Database = {
           total: number
         }[]
       }
-      get_equity_trend: {
-        Args: never
-        Returns: {
-          date: string
-          equity: number
-        }[]
-      }
+      get_equity_trend:
+        | {
+            Args: never
+            Returns: {
+              date: string
+              equity: number
+            }[]
+          }
+        | {
+            Args: { p_days?: number }
+            Returns: {
+              date: string
+              equity: number
+            }[]
+          }
       get_monthly_cash_flow: {
         Args: never
         Returns: {
