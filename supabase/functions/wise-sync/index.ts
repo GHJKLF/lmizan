@@ -181,22 +181,7 @@ Deno.serve(async (req) => {
         );
       }
 
-      const { data: existingTxs } = await supabaseAdmin
-        .from("transactions")
-        .select("notes")
-        .eq("account", conn.account_name)
-        .eq("user_id", conn.user_id);
-
-      const existingRefs = new Set(
-        (existingTxs || [])
-          .map((t: any) => {
-            const match = (t.notes || "").match(/wise_ref:(.+)/);
-            return match ? match[1] : null;
-          })
-          .filter(Boolean)
-      );
-
-      const mapped = statements.map((st: any) => {
+      newTxs = statements.map((st: any) => {
         const amount = Math.abs(st.amount?.value || 0);
         const date = (st.date || "").split("T")[0];
         const description = st.details?.description || st.details?.type || "Wise Transaction";
@@ -205,7 +190,7 @@ Deno.serve(async (req) => {
         const refNumber = st.referenceNumber || "";
 
         return {
-          id: crypto.randomUUID(),
+          id: "wise-" + refNumber,
           date,
           amount,
           currency: st.amount?.currency || conn.currency,
@@ -216,11 +201,8 @@ Deno.serve(async (req) => {
           notes: `wise_ref:${refNumber}`,
           running_balance: st.runningBalance?.value ?? null,
           user_id: conn.user_id,
-          _wise_ref: refNumber,
         };
       });
-
-      newTxs = mapped.filter((t: any) => !existingRefs.has(t._wise_ref));
     } else {
       console.log("Using Transfers API fallback for connection", wise_connection_id);
       const transfers = await fetchAllTransfers(
@@ -241,22 +223,7 @@ Deno.serve(async (req) => {
         );
       }
 
-      const { data: existingTxs } = await supabaseAdmin
-        .from("transactions")
-        .select("notes")
-        .eq("account", conn.account_name)
-        .eq("user_id", conn.user_id);
-
-      const existingIds = new Set(
-        (existingTxs || [])
-          .map((t: any) => {
-            const match = (t.notes || "").match(/wise_transfer_id:(\d+)/);
-            return match ? match[1] : null;
-          })
-          .filter(Boolean)
-      );
-
-      const mapped = transfers.map((tr: any) => {
+      newTxs = transfers.map((tr: any) => {
         const amount = Math.abs(tr.sourceValue || 0);
         const date = (tr.created || "").split("T")[0];
         const recipientName = tr.targetAccount?.name?.fullName || tr.targetAccount?.name || "";
@@ -265,7 +232,7 @@ Deno.serve(async (req) => {
         const description = descParts.length > 0 ? descParts.join(" – ") : "Wise Transfer";
 
         return {
-          id: crypto.randomUUID(),
+          id: "wise-transfer-" + tr.id,
           date,
           amount,
           currency: tr.sourceCurrency || conn.currency,
@@ -276,22 +243,18 @@ Deno.serve(async (req) => {
           notes: `wise_transfer_id:${tr.id}`,
           running_balance: null,
           user_id: conn.user_id,
-          _wise_id: String(tr.id),
         };
       });
-
-      newTxs = mapped.filter((t: any) => !existingIds.has(t._wise_id));
     }
 
     let inserted = 0;
     if (newTxs.length > 0) {
-      const payloads = newTxs.map(({ _wise_id, _wise_ref, ...rest }: any) => rest);
       const CHUNK = 500;
-      for (let i = 0; i < payloads.length; i += CHUNK) {
-        const chunk = payloads.slice(i, i + CHUNK);
+      for (let i = 0; i < newTxs.length; i += CHUNK) {
+        const chunk = newTxs.slice(i, i + CHUNK);
         const { error: insertErr } = await supabaseAdmin
           .from("transactions")
-          .insert(chunk);
+          .upsert(chunk, { onConflict: "id", ignoreDuplicates: true });
         if (!insertErr) inserted += chunk.length;
         else console.error("Insert error:", insertErr);
       }

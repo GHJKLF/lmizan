@@ -77,28 +77,6 @@ Deno.serve(async (req) => {
       "Content-Type": "application/x-www-form-urlencoded",
     };
 
-    // Fetch existing dedup keys upfront
-    // Paginate to load ALL existing dedup keys (PostgREST caps single queries)
-    const existingIds = new Set<string>();
-    let dedupOffset = 0;
-    const DEDUP_PAGE = 1000;
-    while (true) {
-      const { data: batch } = await supabaseAdmin
-        .from("transactions")
-        .select("notes")
-        .eq("account", conn.account_name)
-        .eq("user_id", conn.user_id)
-        .range(dedupOffset, dedupOffset + DEDUP_PAGE - 1)
-        .order("id", { ascending: true });
-      if (!batch || batch.length === 0) break;
-      batch.forEach((t: any) => {
-        const match = (t.notes || "").match(/stripe_bt:([^\s|]+)/);
-        if (match) existingIds.add(match[1]);
-      });
-      dedupOffset += batch.length;
-      if (batch.length < DEDUP_PAGE) break;
-    }
-
     // Helper: map a Stripe balance_transaction to our insert format
     function mapBt(bt: any) {
       const currency = (bt.currency || "usd").toUpperCase();
@@ -112,7 +90,7 @@ Deno.serve(async (req) => {
       const feePart = feeAmount !== 0 ? ` | Fee: -${feeAmount.toFixed(2)} ${currency}` : "";
       const grossPart = grossAmount !== netAmount ? ` | Gross: ${grossAmount.toFixed(2)} ${currency}` : "";
       return {
-        id: crypto.randomUUID(),
+        id: "stripe-" + bt.id,
         date,
         amount,
         currency,
@@ -123,30 +101,22 @@ Deno.serve(async (req) => {
         notes: `stripe_bt:${bt.id}${feePart}${grossPart}`,
         running_balance: null,
         user_id: conn.user_id,
-        _stripe_id: bt.id,
       };
     }
 
     // Helper: dedup, filter, insert a page of Stripe balance_transactions
     async function insertPage(pageTxs: any[]): Promise<number> {
-      const filtered = pageTxs;
-      const mapped = filtered.map(mapBt);
-      const newTxs = mapped.filter((t: any) => t._stripe_id && !existingIds.has(t._stripe_id));
+      const mapped = pageTxs.map(mapBt);
       let inserted = 0;
-      if (newTxs.length > 0) {
-        const payloads = newTxs.map(({ _stripe_id, ...rest }: any) => rest);
+      if (mapped.length > 0) {
         const CHUNK = 500;
-        for (let i = 0; i < payloads.length; i += CHUNK) {
-          const chunk = payloads.slice(i, i + CHUNK);
+        for (let i = 0; i < mapped.length; i += CHUNK) {
+          const chunk = mapped.slice(i, i + CHUNK);
           const { error: insertErr } = await supabaseAdmin
             .from("transactions")
-            .insert(chunk);
+            .upsert(chunk, { onConflict: "id", ignoreDuplicates: true });
           if (!insertErr) {
             inserted += chunk.length;
-            chunk.forEach((t: any) => {
-              const match = (t.notes || "").match(/stripe_bt:([^\s|]+)/);
-              if (match) existingIds.add(match[1]);
-            });
           } else {
             console.error("Insert error:", insertErr);
           }

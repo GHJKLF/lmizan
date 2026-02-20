@@ -109,7 +109,7 @@ Deno.serve(async (req) => {
       `Wise ${isCredit ? "Credit" : "Debit"}`;
 
     const tx = {
-      id: crypto.randomUUID(),
+      id: "wise-wh-" + (data.transfer_reference || crypto.randomUUID()),
       date,
       amount,
       currency: data.currency || conn.currency,
@@ -124,7 +124,7 @@ Deno.serve(async (req) => {
 
     const { error: insertErr } = await supabase
       .from("transactions")
-      .insert(tx);
+      .upsert(tx, { onConflict: "id", ignoreDuplicates: true });
 
     if (insertErr) {
       console.error("Webhook insert error:", insertErr);
