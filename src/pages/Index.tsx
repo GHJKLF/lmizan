@@ -7,6 +7,7 @@ import AppSidebar from '@/components/AppSidebar';
 import Dashboard from '@/components/dashboard/Dashboard';
 import TransactionTable from '@/components/transactions/TransactionTable';
 import AIInsightsView from '@/components/ai/AIInsightsView';
+import PnlReport from '@/components/pnl/PnlReport';
 import ImportModal from '@/components/ai/ImportModal';
 import UpdateBalanceModal from '@/components/modals/UpdateBalanceModal';
 import SettingsModal from '@/components/modals/SettingsModal';
@@ -353,6 +354,8 @@ const Index: React.FC = () => {
         {currentView === 'AI_INSIGHTS' && (
           <AIInsightsView transactions={selectedAccount !== 'ALL' ? accountTransactions : transactions} />
         )}
+
+        {currentView === 'PNL' && <PnlReport />}
       </main>
 
       {/* Modals */}
