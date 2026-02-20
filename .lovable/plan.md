@@ -1,24 +1,38 @@
 
 
-## Fix Stripe Balance: Show API Balance Instead of Computed
+## Fix: Account Balances Chart Using Stripe API Balance
 
 ### Problem
-Transaction-based balance (Inflow - Outflow) shows €1,034,653 which is wrong. Including Transfers (Inflow - Outflow - Transfers) gives -€207,749 due to asymmetric historical data. The real balance must come from Stripe's /v1/balance API.
+The `get_account_balances` RPC function computes Stripe account balances as `Inflow - Outflow` from transactions, producing ~EUR 1M+. The Stripe API balance (EUR 213) is already stored in `stripe_connections.balance_available` and `balance_pending` but the RPC doesn't use it.
 
-### Solution Implemented
+### Solution
+Update the `get_account_balances` SQL function to add a new CTE that checks `stripe_connections` for accounts with a non-null `balance_fetched_at`. When a match is found, use `balance_available + balance_pending` instead of the transaction-computed sum.
 
-#### 1. Balance formula reverted (RPC + balanceEngine.ts)
-- `computed_balances` CTE: `Inflow - Outflow` (Transfers excluded, as before)
-- `balanceEngine.ts` fallback: `if (tx.type === 'Transfer') return;`
+### Technical Detail
 
-#### 2. Stripe API balance stored in `stripe_connections`
-- Added columns: `balance_available`, `balance_pending`, `balance_fetched_at`
-- `stripe-sync` edge function now calls `GET /v1/balance` and stores the result
+**File: New SQL migration**
 
-#### 3. AccountDashboard shows API balance for Stripe
-- Balance card shows `balance_available + balance_pending` from `stripe_connections`
-- Available/Pending shown as separate cards
-- Falls back to transaction-computed balance if API balance not yet fetched
-- Analytics section shows Net Revenue Processed and Total Transfers
+Add a `stripe_api_balances` CTE that joins `accounts` to `stripe_connections` on `account_name` and `user_id`, selecting rows where `balance_fetched_at IS NOT NULL`. Then in the final `latest` UNION, prioritize `stripe_api_balances` over `computed_balances` by excluding accounts that have a Stripe API balance from the computed path.
 
-### Next: Trigger a Stripe sync to populate the balance columns
+```text
+Flow:
+1. latest_with_rb      -- accounts with running_balance in transactions (Wise)
+2. stripe_api_balances -- accounts matching stripe_connections with fetched balance
+3. computed_balances   -- remaining accounts (Inflow - Outflow), excluding those already covered
+4. latest = UNION ALL of all three
+```
+
+The stripe CTE will produce rows with:
+- `running_balance = balance_available + balance_pending`
+- `balance_available = sc.balance_available`
+- `balance_reserved = sc.balance_pending`
+- `currency` from `stripe_connections.currency`
+
+No other files are changed. This only affects the chart data source via the RPC.
+
+### Files Modified
+
+| File | Change |
+|------|--------|
+| New SQL migration | Update `get_account_balances` RPC to use Stripe API balances when available |
+
