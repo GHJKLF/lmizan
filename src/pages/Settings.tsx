@@ -71,12 +71,17 @@ interface StripeConnection {
 interface AirwallexConnection {
   id: string;
   account_name: string;
-  currency: string;
   sync_start_date: string | null;
   last_synced_at: string | null;
-  balance_available: number | null;
-  balance_fetched_at: string | null;
   created_at: string;
+}
+
+interface AirwallexBalance {
+  currency: string;
+  available_amount: number;
+  pending_amount: number;
+  total_amount: number;
+  synced_at: string;
 }
 
 interface WiseBalance {
@@ -101,6 +106,12 @@ interface StripeBalance {
 
 const STRIPE_COLOR = '#635bff';
 const AIRWALLEX_COLOR = '#0e6cc4';
+
+const CURRENCY_SYMBOLS: Record<string, string> = {
+  EUR: '€', USD: '$', GBP: '£', HKD: 'HK$', SGD: 'S$', AUD: 'A$',
+  CNY: '¥', JPY: '¥', CHF: 'CHF',
+};
+const getCurrencySymbol = (c: string) => CURRENCY_SYMBOLS[c] || `${c} `;
 
 const Settings: React.FC = () => {
   const navigate = useNavigate();
@@ -133,9 +144,9 @@ const Settings: React.FC = () => {
     account_name: '',
     client_id: '',
     api_key: '',
-    currency: 'EUR',
     sync_start_date: '',
   });
+  const [airwallexBalances, setAirwallexBalances] = useState<Record<string, AirwallexBalance[]>>({});
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -155,7 +166,7 @@ const Settings: React.FC = () => {
           .order('created_at', { ascending: false }),
         supabase
           .from('airwallex_connections_safe' as any)
-          .select('id, account_name, currency, sync_start_date, last_synced_at, balance_available, balance_fetched_at, created_at')
+          .select('id, account_name, sync_start_date, last_synced_at, created_at')
           .order('created_at', { ascending: false }),
         supabase
           .from('accounts')
@@ -166,6 +177,22 @@ const Settings: React.FC = () => {
       setPaypalConnections((paypalRes.data as unknown as PayPalConnection[]) || []);
       setStripeConnections((stripeRes.data as unknown as StripeConnection[]) || []);
       setAirwallexConnections((airwallexRes.data as unknown as AirwallexConnection[]) || []);
+      // Fetch airwallex balances and group by connection_id
+      const airwallexIds = ((airwallexRes.data as any[]) || []).map((c: any) => c.id);
+      if (airwallexIds.length > 0) {
+        const { data: balData } = await supabase
+          .from('airwallex_balances' as any)
+          .select('connection_id, currency, available_amount, pending_amount, total_amount, synced_at')
+          .in('connection_id', airwallexIds);
+        const grouped: Record<string, AirwallexBalance[]> = {};
+        for (const b of (balData as any[]) || []) {
+          if (!grouped[b.connection_id]) grouped[b.connection_id] = [];
+          grouped[b.connection_id].push(b);
+        }
+        setAirwallexBalances(grouped);
+      } else {
+        setAirwallexBalances({});
+      }
       setAccounts((accountsRes.data as any[]) || []);
     } catch (e) {
       console.error(e);
@@ -328,13 +355,12 @@ const Settings: React.FC = () => {
         account_name: airwallexForm.account_name,
         client_id: airwallexForm.client_id,
         api_key: airwallexForm.api_key,
-        currency: airwallexForm.currency || 'EUR',
         sync_start_date: airwallexForm.sync_start_date || null,
       });
       if (error) throw error;
       toast.success('Airwallex connection added');
       setAirwallexFormOpen(false);
-      setAirwallexForm({ account_name: '', client_id: '', api_key: '', currency: 'EUR', sync_start_date: '' });
+      setAirwallexForm({ account_name: '', client_id: '', api_key: '', sync_start_date: '' });
       await loadData();
     } catch (err: any) {
       toast.error(err.message || 'Failed to add connection');
@@ -854,12 +880,12 @@ const Settings: React.FC = () => {
                   />
                 </div>
                 <div>
-                  <label className="text-xs text-muted-foreground block mb-1">Currency</label>
+                  <label className="text-xs text-muted-foreground block mb-1">Client ID *</label>
                   <input
                     type="text"
-                    value={airwallexForm.currency}
-                    onChange={e => setAirwallexForm(f => ({ ...f, currency: e.target.value.toUpperCase() }))}
-                    placeholder="EUR"
+                    value={airwallexForm.client_id}
+                    onChange={e => setAirwallexForm(f => ({ ...f, client_id: e.target.value }))}
+                    placeholder="Airwallex Client ID"
                     className="w-full px-3 py-2 text-xs bg-background border border-border rounded-lg text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
                   />
                 </div>
@@ -926,17 +952,21 @@ const Settings: React.FC = () => {
                     <div className="flex items-center gap-2">
                       <Globe size={14} style={{ color: AIRWALLEX_COLOR }} />
                       <span className="font-semibold text-foreground text-sm">{conn.account_name}</span>
-                      <span className="text-xs px-2 py-0.5 bg-accent rounded-full text-muted-foreground font-medium">
-                        {conn.currency}
-                      </span>
                     </div>
-                    {conn.balance_available !== null && (
-                      <p className="text-xs text-muted-foreground mt-1">
-                        Balance: {conn.balance_available.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {conn.currency}
-                        {conn.balance_fetched_at && (
-                          <span className="ml-1 opacity-60">· fetched {new Date(conn.balance_fetched_at).toLocaleDateString()}</span>
-                        )}
-                      </p>
+                    {airwallexBalances[conn.id]?.length > 0 ? (
+                      <div className="flex flex-wrap gap-1.5 mt-1.5">
+                        {airwallexBalances[conn.id].map((b) => {
+                          const sym = getCurrencySymbol(b.currency);
+                          const formatted = b.available_amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                          return (
+                            <span key={b.currency} className="text-xs px-2 py-0.5 bg-accent rounded-full text-foreground font-medium">
+                              {b.currency} {sym}{formatted}
+                            </span>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <p className="text-xs text-muted-foreground mt-1">Sync to see balances</p>
                     )}
                     <p className="text-xs text-muted-foreground">
                       Last synced: {conn.last_synced_at

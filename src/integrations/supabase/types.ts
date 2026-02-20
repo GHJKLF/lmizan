@@ -653,7 +653,6 @@ export type Database = {
           account_name: string
           api_key: string
           client_id: string
-          currency: string
           id: string
           last_synced_at: string
           sync_start_date: string
