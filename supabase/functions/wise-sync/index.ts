@@ -200,7 +200,8 @@ Deno.serve(async (req) => {
         const amount = Math.abs(st.amount?.value || 0);
         const date = (st.date || "").split("T")[0];
         const description = st.details?.description || st.details?.type || "Wise Transaction";
-        const type = st.type === "CREDIT" ? "Inflow" : "Outflow";
+        const isStripeTransfer = description.toLowerCase().includes("stripe payments");
+        const type = isStripeTransfer ? "Transfer" : (st.type === "CREDIT" ? "Inflow" : "Outflow");
         const refNumber = st.referenceNumber || "";
 
         return {

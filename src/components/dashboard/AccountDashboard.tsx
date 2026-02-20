@@ -31,6 +31,11 @@ const PIE_COLORS = [
 
 const AccountDashboard: React.FC<Props> = React.memo(({ account, summaries, transactions, onBack }) => {
   const accountTxs = useMemo(() => transactions.filter((t) => t.account === account), [transactions, account]);
+  const transferVolume = useMemo(() => {
+    return accountTxs
+      .filter((t) => t.type === 'Transfer')
+      .reduce((sum, t) => sum + toEUR(t.amount, t.currency), 0);
+  }, [accountTxs]);
   const monthlyFlows = useMemo(() => computeMonthlyFlows(accountTxs), [accountTxs]);
   const categoryBreakdown = useMemo(() => computeCategoryBreakdown(accountTxs), [accountTxs]);
   const recentTxs = useMemo(
@@ -59,7 +64,7 @@ const AccountDashboard: React.FC<Props> = React.memo(({ account, summaries, tran
               <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
                 {summary.currency} Liquidity
               </p>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
                 <Card className="border-border/60">
                   <CardContent className="p-4">
                     <p className="text-xs font-semibold text-muted-foreground uppercase">Balance</p>
@@ -85,6 +90,17 @@ const AccountDashboard: React.FC<Props> = React.memo(({ account, summaries, tran
                     </p>
                   </CardContent>
                 </Card>
+                {transferVolume > 0 && (
+                  <Card className="border-border/60">
+                    <CardContent className="p-4">
+                      <p className="text-xs font-semibold text-muted-foreground uppercase">Transfers</p>
+                      <p className="text-xl font-bold text-blue-500 mt-1">
+                        {formatEUR(transferVolume)}
+                      </p>
+                      <p className="text-xs text-muted-foreground">Pass-through volume</p>
+                    </CardContent>
+                  </Card>
+                )}
               </div>
             </div>
           ))}
@@ -187,11 +203,13 @@ const AccountDashboard: React.FC<Props> = React.memo(({ account, summaries, tran
                   <div className="flex items-center gap-3 min-w-0">
                     <div
                       className={`p-1.5 rounded-md ${
-                        tx.type === 'Inflow' ? 'bg-emerald-500/10' : 'bg-destructive/10'
+                        tx.type === 'Inflow' ? 'bg-emerald-500/10' : tx.type === 'Transfer' ? 'bg-blue-500/10' : 'bg-destructive/10'
                       }`}
                     >
                       {tx.type === 'Inflow' ? (
                         <TrendingUp size={14} className="text-emerald-600" />
+                      ) : tx.type === 'Transfer' ? (
+                        <ArrowLeft size={14} className="text-blue-500" />
                       ) : (
                         <TrendingDown size={14} className="text-destructive" />
                       )}
@@ -205,10 +223,10 @@ const AccountDashboard: React.FC<Props> = React.memo(({ account, summaries, tran
                   </div>
                   <p
                     className={`text-sm font-semibold whitespace-nowrap ${
-                      tx.type === 'Inflow' ? 'text-emerald-600' : 'text-destructive'
+                      tx.type === 'Inflow' ? 'text-emerald-600' : tx.type === 'Transfer' ? 'text-blue-500' : 'text-destructive'
                     }`}
                   >
-                    {tx.type === 'Inflow' ? '+' : '-'}
+                    {tx.type === 'Inflow' ? '+' : tx.type === 'Transfer' ? '↔' : '-'}
                     {formatAmount(tx.amount, tx.currency)}
                   </p>
                 </div>

@@ -99,6 +99,7 @@ export const computeAccountSummaries = (transactions: Transaction[]): AccountSum
     } else {
       // Compute from transaction history
       txs.forEach((tx) => {
+        if (tx.type === 'Transfer') return; // Transfers don't affect balance
         if (tx.type === 'Inflow') total += tx.amount;
         else total -= tx.amount;
       });
@@ -172,6 +173,7 @@ export const computeMonthlyFlows = (transactions: Transaction[], account?: strin
     const month = tx.date.substring(0, 7); // YYYY-MM
     if (!monthMap.has(month)) monthMap.set(month, { inflow: 0, outflow: 0 });
     const entry = monthMap.get(month)!;
+    if (tx.type === 'Transfer') return; // Transfers excluded from flows
     const eurAmount = toEUR(tx.amount, tx.currency);
     if (tx.type === 'Inflow') entry.inflow += eurAmount;
     else entry.outflow += eurAmount;
@@ -198,6 +200,7 @@ export const computeEquityTrend = (transactions: Transaction[]): EquityPoint[] =
   const dailyMap = new Map<string, number>();
 
   sorted.forEach((tx) => {
+    if (tx.type === 'Transfer') return; // Transfers excluded from equity
     const eurAmount = toEUR(tx.amount, tx.currency);
     if (tx.type === 'Inflow') running += eurAmount;
     else running -= eurAmount;

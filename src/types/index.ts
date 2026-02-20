@@ -11,6 +11,7 @@ export enum Currency {
 export enum TransactionType {
   INFLOW = 'Inflow',
   OUTFLOW = 'Outflow',
+  TRANSFER = 'Transfer',
 }
 
 export type ViewState = 'DASHBOARD' | 'TRANSACTIONS' | 'AI_INSIGHTS';
