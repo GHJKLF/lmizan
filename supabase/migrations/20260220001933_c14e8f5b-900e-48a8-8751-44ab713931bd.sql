@@ -1,0 +1,1 @@
+SELECT setval('accounts_id_seq', (SELECT COALESCE(MAX(id), 0) FROM accounts));
