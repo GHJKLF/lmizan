@@ -248,15 +248,15 @@ const Settings: React.FC = () => {
     else { toast.success('Stripe connection deleted'); await loadData(); }
   };
 
-  const handleStripeSync = async (id: string) => {
+  const handleStripeSync = async (id: string, startDate?: string) => {
     setStripeSyncingId(id);
     try {
-      const res = await supabase.functions.invoke('stripe-sync', {
-        body: { connection_id: id },
-      });
+      const body: any = { connection_id: id };
+      if (startDate) body.start_date = startDate;
+      const res = await supabase.functions.invoke('stripe-sync', { body });
       if (res.error) throw res.error;
       const result = res.data;
-      toast.success(`Stripe synced: ${result.synced} new transactions`);
+      toast.success(`Stripe synced: ${result.synced} new transactions${result.backfilled ? ` (${result.backfilled} backfilled)` : ''}`);
       await loadData();
     } catch (err: any) {
       toast.error(err.message || 'Stripe sync failed');
@@ -678,19 +678,48 @@ const Settings: React.FC = () => {
                         </PopoverContent>
                       )}
                     </Popover>
-                    {/* Sync */}
-                    <button
-                      onClick={() => handleStripeSync(conn.id)}
-                      disabled={stripeSyncingId === conn.id}
-                      className="p-2 text-muted-foreground rounded-lg transition-colors disabled:opacity-50"
-                      title="Sync Now"
-                    >
-                      {stripeSyncingId === conn.id ? (
-                        <Loader2 size={14} className="animate-spin" />
-                      ) : (
-                        <RefreshCw size={14} />
-                      )}
-                    </button>
+                    {/* Sync with dropdown */}
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <div className="flex items-center">
+                          <button
+                            onClick={() => handleStripeSync(conn.id)}
+                            disabled={stripeSyncingId === conn.id}
+                            className="p-2 text-muted-foreground hover:bg-accent rounded-l-lg transition-colors disabled:opacity-50"
+                            title="Sync Now"
+                          >
+                            {stripeSyncingId === conn.id ? (
+                              <Loader2 size={14} className="animate-spin" />
+                            ) : (
+                              <RefreshCw size={14} />
+                            )}
+                          </button>
+                          <button
+                            disabled={stripeSyncingId === conn.id}
+                            className="p-2 text-muted-foreground hover:bg-accent rounded-r-lg transition-colors disabled:opacity-50 border-l border-border"
+                            title="Sync options"
+                          >
+                            <ChevronDown size={10} />
+                          </button>
+                        </div>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-48 p-1" align="end">
+                        <button
+                          onClick={() => handleStripeSync(conn.id)}
+                          disabled={stripeSyncingId === conn.id}
+                          className="w-full text-left px-3 py-2 text-xs rounded-md hover:bg-accent text-foreground"
+                        >
+                          Sync (incremental)
+                        </button>
+                        <button
+                          onClick={() => handleStripeSync(conn.id, '2020-01-01')}
+                          disabled={stripeSyncingId === conn.id}
+                          className="w-full text-left px-3 py-2 text-xs rounded-md hover:bg-accent text-foreground"
+                        >
+                          Full Historical Sync (from 2020)
+                        </button>
+                      </PopoverContent>
+                    </Popover>
                     {/* Delete */}
                     <button
                       onClick={() => handleStripeDelete(conn.id)}

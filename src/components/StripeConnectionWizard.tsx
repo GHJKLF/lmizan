@@ -125,7 +125,7 @@ const StripeConnectionWizard: React.FC<Props> = ({ isOpen, onClose, onSuccess })
 
       if (inserted) {
         supabase.functions.invoke('stripe-sync', {
-          body: { connection_id: (inserted as any).id },
+          body: { connection_id: (inserted as any).id, full_sync: true },
         }).then((res) => {
           if (res.data && !res.error) {
             toast.success(`Stripe sync complete: ${res.data.synced} transactions imported`);
