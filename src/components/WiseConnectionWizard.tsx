@@ -218,13 +218,23 @@ const WiseConnectionWizard: React.FC<Props> = ({ open, onOpenChange, onComplete 
           });
         }
 
-        // Upsert into accounts table for data hygiene
-        try {
-          await supabase.from('accounts').upsert(
-            { name: `Wise ${sel.profileName}`, user_id: user.id } as any,
-            { onConflict: 'name,user_id' }
+        // Upsert into accounts table so it appears in sidebar
+        const wiseName = `Wise ${sel.profileName}`;
+        const { error: acctErr } = await supabase
+          .from('accounts')
+          .upsert(
+            { name: wiseName, user_id: user.id },
+            { onConflict: 'name,user_id', ignoreDuplicates: true }
           );
-        } catch {}
+        if (acctErr) {
+          console.warn('Wise accounts upsert failed, trying insert:', acctErr.message);
+          const { error: fallback } = await supabase
+            .from('accounts')
+            .insert({ name: wiseName, user_id: user.id });
+          if (fallback && !fallback.message?.includes('duplicate')) {
+            console.error('Failed to insert Wise account:', fallback.message);
+          }
+        }
 
         updatedResults[i] = { ...updatedResults[i], status: 'done' };
       } catch (err: any) {

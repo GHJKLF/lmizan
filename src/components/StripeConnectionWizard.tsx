@@ -105,13 +105,23 @@ const StripeConnectionWizard: React.FC<Props> = ({ isOpen, onClose, onSuccess })
 
       toast.success('Stripe account connected! Syncing transactions...');
 
-      // Upsert into accounts table for data hygiene
-      try {
-        await supabase.from('accounts').upsert(
-          { name: accountName.trim() || 'Stripe', user_id: user.id } as any,
-          { onConflict: 'name,user_id' }
+      // Upsert into accounts table so it appears in sidebar
+      const acctName = accountName.trim() || 'Stripe';
+      const { error: acctErr } = await supabase
+        .from('accounts')
+        .upsert(
+          { name: acctName, user_id: user.id },
+          { onConflict: 'name,user_id', ignoreDuplicates: true }
         );
-      } catch {}
+      if (acctErr) {
+        console.warn('Stripe accounts upsert failed, trying insert:', acctErr.message);
+        const { error: fallback } = await supabase
+          .from('accounts')
+          .insert({ name: acctName, user_id: user.id });
+        if (fallback && !fallback.message?.includes('duplicate')) {
+          console.error('Failed to insert Stripe account:', fallback.message);
+        }
+      }
 
       if (inserted) {
         supabase.functions.invoke('stripe-sync', {
