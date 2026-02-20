@@ -99,7 +99,20 @@ const Index: React.FC = () => {
         }
       }
 
-      if (!wiseConns?.length && !paypalConns?.length && !stripeConns?.length) {
+      // Sync Airwallex connections
+      const { data: airwallexConns } = await supabase
+        .from('airwallex_connections_safe' as any)
+        .select('id, account_name');
+      if (airwallexConns?.length) {
+        for (const conn of airwallexConns as any[]) {
+          const res = await supabase.functions.invoke('airwallex-sync', {
+            body: { connection_id: conn.id, full_sync: fullSync },
+          });
+          if (!res.error && res.data) totalInserted += res.data.synced || 0;
+        }
+      }
+
+      if (!wiseConns?.length && !paypalConns?.length && !stripeConns?.length && !airwallexConns?.length) {
         toast.info('No connections configured. Go to Settings to add one.');
       } else {
         toast.success(`Sync complete: ${totalInserted} new transactions`);

@@ -83,6 +83,48 @@ export type Database = {
         }
         Relationships: []
       }
+      airwallex_connections: {
+        Row: {
+          account_name: string
+          api_key: string
+          balance_available: number | null
+          balance_fetched_at: string | null
+          client_id: string
+          created_at: string | null
+          currency: string
+          id: string
+          last_synced_at: string | null
+          sync_start_date: string | null
+          user_id: string
+        }
+        Insert: {
+          account_name: string
+          api_key: string
+          balance_available?: number | null
+          balance_fetched_at?: string | null
+          client_id: string
+          created_at?: string | null
+          currency?: string
+          id?: string
+          last_synced_at?: string | null
+          sync_start_date?: string | null
+          user_id: string
+        }
+        Update: {
+          account_name?: string
+          api_key?: string
+          balance_available?: number | null
+          balance_fetched_at?: string | null
+          client_id?: string
+          created_at?: string | null
+          currency?: string
+          id?: string
+          last_synced_at?: string | null
+          sync_start_date?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       paypal_connections: {
         Row: {
           account_name: string
@@ -412,6 +454,42 @@ export type Database = {
       }
     }
     Views: {
+      airwallex_connections_safe: {
+        Row: {
+          account_name: string | null
+          balance_available: number | null
+          balance_fetched_at: string | null
+          created_at: string | null
+          currency: string | null
+          id: string | null
+          last_synced_at: string | null
+          sync_start_date: string | null
+          user_id: string | null
+        }
+        Insert: {
+          account_name?: string | null
+          balance_available?: number | null
+          balance_fetched_at?: string | null
+          created_at?: string | null
+          currency?: string | null
+          id?: string | null
+          last_synced_at?: string | null
+          sync_start_date?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          account_name?: string | null
+          balance_available?: number | null
+          balance_fetched_at?: string | null
+          created_at?: string | null
+          currency?: string | null
+          id?: string | null
+          last_synced_at?: string | null
+          sync_start_date?: string | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       paypal_connections_safe: {
         Row: {
           account_name: string | null
@@ -567,6 +645,19 @@ export type Database = {
           reserved: number
           tier: string
           total: number
+        }[]
+      }
+      get_airwallex_connection_with_key: {
+        Args: { p_connection_id: string }
+        Returns: {
+          account_name: string
+          api_key: string
+          client_id: string
+          currency: string
+          id: string
+          last_synced_at: string
+          sync_start_date: string
+          user_id: string
         }[]
       }
       get_equity_trend: {
