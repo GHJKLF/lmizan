@@ -10,6 +10,8 @@ import {
   toEUR,
 } from '@/services/balanceEngine';
 import { ArrowLeft, TrendingUp, TrendingDown } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
 
 interface Props {
   account: string;
@@ -31,6 +33,22 @@ const PIE_COLORS = [
 
 const AccountDashboard: React.FC<Props> = React.memo(({ account, summaries, transactions, onBack }) => {
   const accountTxs = useMemo(() => transactions.filter((t) => t.account === account), [transactions, account]);
+  const isProcessor = summaries.length > 0 && summaries[0].tier === 'PROCESSOR';
+
+  // Fetch Stripe API balance for processor accounts
+  const { data: stripeBalance } = useQuery({
+    queryKey: ['stripe-balance', account],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('stripe_connections')
+        .select('balance_available, balance_pending, balance_fetched_at')
+        .eq('account_name', account)
+        .maybeSingle();
+      return data;
+    },
+    enabled: isProcessor && account.toLowerCase().includes('stripe'),
+  });
+
   const { transferVolume, totalInflow, totalOutflow } = useMemo(() => {
     let transfers = 0, inflow = 0, outflow = 0;
     accountTxs.forEach((t) => {
@@ -42,7 +60,6 @@ const AccountDashboard: React.FC<Props> = React.memo(({ account, summaries, tran
     return { transferVolume: transfers, totalInflow: inflow, totalOutflow: outflow };
   }, [accountTxs]);
   const netRevenueProcessed = totalInflow - totalOutflow;
-  const actualBalance = totalInflow - totalOutflow - transferVolume;
   const monthlyFlows = useMemo(() => computeMonthlyFlows(accountTxs), [accountTxs]);
   const categoryBreakdown = useMemo(() => computeCategoryBreakdown(accountTxs), [accountTxs]);
   const recentTxs = useMemo(
@@ -50,6 +67,8 @@ const AccountDashboard: React.FC<Props> = React.memo(({ account, summaries, tran
       [...accountTxs].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).slice(0, 10),
     [accountTxs]
   );
+
+  const hasApiBalance = stripeBalance?.balance_available != null;
 
   return (
     <div className="space-y-4">
@@ -75,25 +94,40 @@ const AccountDashboard: React.FC<Props> = React.memo(({ account, summaries, tran
                 <Card className="border-border/60">
                   <CardContent className="p-4">
                     <p className="text-xs font-semibold text-muted-foreground uppercase">Balance</p>
-                    <p className="text-xl font-bold text-foreground mt-1">
-                      {formatAmount(summary.total, summary.currency)}
-                    </p>
-                    <p className="text-xs text-muted-foreground">≈ {formatEUR(toEUR(summary.total, summary.currency))}</p>
+                    {hasApiBalance ? (
+                      <>
+                        <p className="text-xl font-bold text-foreground mt-1">
+                          {formatEUR((stripeBalance.balance_available ?? 0) + (stripeBalance.balance_pending ?? 0))}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          Available: {formatEUR(stripeBalance.balance_available ?? 0)} · Pending: {formatEUR(stripeBalance.balance_pending ?? 0)}
+                        </p>
+                      </>
+                    ) : (
+                      <>
+                        <p className="text-xl font-bold text-foreground mt-1">
+                          {formatAmount(summary.total, summary.currency)}
+                        </p>
+                        <p className="text-xs text-muted-foreground">≈ {formatEUR(toEUR(summary.total, summary.currency))}</p>
+                      </>
+                    )}
                   </CardContent>
                 </Card>
                 <Card className="border-border/60">
                   <CardContent className="p-4">
                     <p className="text-xs font-semibold text-muted-foreground uppercase">Available</p>
                     <p className="text-xl font-bold text-foreground mt-1">
-                      {formatAmount(summary.available, summary.currency)}
+                      {hasApiBalance ? formatEUR(stripeBalance.balance_available ?? 0) : formatAmount(summary.available, summary.currency)}
                     </p>
                   </CardContent>
                 </Card>
                 <Card className="border-border/60">
                   <CardContent className="p-4">
-                    <p className="text-xs font-semibold text-muted-foreground uppercase">Reserved</p>
+                    <p className="text-xs font-semibold text-muted-foreground uppercase">
+                      {hasApiBalance ? 'Pending' : 'Reserved'}
+                    </p>
                     <p className="text-xl font-bold text-foreground mt-1">
-                      {formatAmount(summary.reserved, summary.currency)}
+                      {hasApiBalance ? formatEUR(stripeBalance.balance_pending ?? 0) : formatAmount(summary.reserved, summary.currency)}
                     </p>
                   </CardContent>
                 </Card>
@@ -112,13 +146,13 @@ const AccountDashboard: React.FC<Props> = React.memo(({ account, summaries, tran
             </div>
           ))}
 
-          {/* Computed stats across all currencies */}
+          {/* Analytics section */}
           {transferVolume > 0 && (
             <div className="space-y-2">
               <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                 Analytics (EUR equivalent)
               </p>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <Card className="border-border/60">
                   <CardContent className="p-4">
                     <p className="text-xs font-semibold text-muted-foreground uppercase">Net Revenue Processed</p>
@@ -130,19 +164,11 @@ const AccountDashboard: React.FC<Props> = React.memo(({ account, summaries, tran
                 </Card>
                 <Card className="border-border/60">
                   <CardContent className="p-4">
-                    <p className="text-xs font-semibold text-muted-foreground uppercase">Computed Balance</p>
-                    <p className="text-xl font-bold text-foreground mt-1">
-                      {formatEUR(actualBalance)}
+                    <p className="text-xs font-semibold text-muted-foreground uppercase">Total Transfers</p>
+                    <p className="text-xl font-bold text-primary mt-1">
+                      {formatEUR(transferVolume)}
                     </p>
-                    <p className="text-xs text-muted-foreground">Inflow − Outflow − Transfers</p>
-                  </CardContent>
-                </Card>
-                <Card className="border-border/60 bg-muted/30">
-                  <CardContent className="p-4">
-                    <p className="text-xs font-semibold text-muted-foreground uppercase">Reconciliation</p>
-                    <p className="text-sm text-muted-foreground mt-1">
-                      {formatEUR(totalInflow)} − {formatEUR(totalOutflow)} − {formatEUR(transferVolume)} = <span className="font-bold text-foreground">{formatEUR(actualBalance)}</span>
-                    </p>
+                    <p className="text-xs text-muted-foreground">Pass-through volume (payouts, reserves)</p>
                   </CardContent>
                 </Card>
               </div>

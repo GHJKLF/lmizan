@@ -81,6 +81,9 @@ export type Database = {
         Row: {
           account_name: string
           api_key: string
+          balance_available: number | null
+          balance_fetched_at: string | null
+          balance_pending: number | null
           created_at: string
           currency: string | null
           email: string | null
@@ -94,6 +97,9 @@ export type Database = {
         Insert: {
           account_name?: string
           api_key: string
+          balance_available?: number | null
+          balance_fetched_at?: string | null
+          balance_pending?: number | null
           created_at?: string
           currency?: string | null
           email?: string | null
@@ -107,6 +113,9 @@ export type Database = {
         Update: {
           account_name?: string
           api_key?: string
+          balance_available?: number | null
+          balance_fetched_at?: string | null
+          balance_pending?: number | null
           created_at?: string
           currency?: string | null
           email?: string | null
