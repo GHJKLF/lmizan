@@ -105,10 +105,10 @@ Deno.serve(async (req) => {
       const netAmount = fromStripeAmount(bt.net || 0, currency);
       const grossAmount = fromStripeAmount(bt.amount || 0, currency);
       const feeAmount = fromStripeAmount(bt.fee || 0, currency);
+      const description = bt.description || bt.type || "Stripe Transaction";
       const type = mapType(bt.type || "", netAmount, description);
       const amount = Math.abs(netAmount);
       const date = new Date((bt.created || 0) * 1000).toISOString().split("T")[0];
-      const description = bt.description || bt.type || "Stripe Transaction";
       const feePart = feeAmount !== 0 ? ` | Fee: -${feeAmount.toFixed(2)} ${currency}` : "";
       const grossPart = grossAmount !== netAmount ? ` | Gross: ${grossAmount.toFixed(2)} ${currency}` : "";
       return {
