@@ -182,7 +182,7 @@ async function fetchStripe(job: any, conn: any) {
       description: item.description || item.type,
       amount: Math.abs(netAmount),
       currency: item.currency?.toUpperCase(),
-      type: item.type === "payout" ? "Transfer" : (netAmount >= 0 ? "Inflow" : "Outflow"),
+      type: item.type === "payout" ? "Transfer" : (/reserve/i.test(item.description || item.type || "") ? "Transfer" : (netAmount >= 0 ? "Inflow" : "Outflow")),
       provider: "stripe",
       provider_transaction_id: item.id,
       notes: "stripe_bt:" + item.id,

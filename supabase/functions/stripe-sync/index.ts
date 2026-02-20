@@ -14,8 +14,9 @@ function fromStripeAmount(amount: number, currency: string): number {
   return ZERO_DECIMAL_CURRENCIES.has(currency.toUpperCase()) ? amount : amount / 100;
 }
 
-function mapType(txType: string, net: number): string {
+function mapType(txType: string, net: number, description?: string): string {
   if (txType === "payout") return "Transfer";
+  if (description && /reserve/i.test(description)) return "Transfer";
   return net >= 0 ? "Inflow" : "Outflow";
 }
 
@@ -52,7 +53,7 @@ Deno.serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
-    const { connection_id, full_sync } = await req.json();
+    const { connection_id, full_sync, start_date } = await req.json();
     if (!connection_id) {
       return new Response(
         JSON.stringify({ error: "connection_id is required" }),
@@ -104,7 +105,7 @@ Deno.serve(async (req) => {
       const netAmount = fromStripeAmount(bt.net || 0, currency);
       const grossAmount = fromStripeAmount(bt.amount || 0, currency);
       const feeAmount = fromStripeAmount(bt.fee || 0, currency);
-      const type = mapType(bt.type || "", netAmount);
+      const type = mapType(bt.type || "", netAmount, description);
       const amount = Math.abs(netAmount);
       const date = new Date((bt.created || 0) * 1000).toISOString().split("T")[0];
       const description = bt.description || bt.type || "Stripe Transaction";
@@ -155,8 +156,12 @@ Deno.serve(async (req) => {
     }
 
     // ── PHASE 1: Forward sync (new transactions) ──
-    const lastSyncedAt = full_sync ? null : conn.last_synced_at;
-    const effectiveLastSynced = lastSyncedAt || (!full_sync ? new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString() : null);
+    // Priority: start_date > full_sync > last_synced_at > 90-day fallback
+    const effectiveLastSynced = start_date
+      ? new Date(start_date).toISOString()
+      : full_sync
+        ? null
+        : conn.last_synced_at || new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString();
     let startingAfter: string | null = null;
     let hasMore = true;
     let totalFetched = 0;
