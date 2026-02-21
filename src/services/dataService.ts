@@ -49,11 +49,19 @@ const isAuthenticated = async (): Promise<string | null> => {
 
 export const DataService = {
   async fetchDashboardData(): Promise<DashboardData> {
-    const [balancesRes, equityRes, flowsRes] = await Promise.all([
+    // First fetch balances and cash flow in parallel
+    const [balancesRes, flowsRes] = await Promise.all([
       supabase.rpc('get_account_balances'),
-      supabase.rpc('get_equity_trend'),
       supabase.rpc('get_monthly_cash_flow'),
     ]);
+
+    // Compute current equity from balances, then pass to equity trend RPC
+    const currentEquity = (balancesRes.data || []).reduce(
+      (sum: number, r: any) => sum + (Number(r.balance_eur) || 0), 0
+    );
+    const equityRes = await supabase.rpc('get_equity_trend', {
+      p_current_equity: currentEquity,
+    });
 
     return {
       accountBalances: (balancesRes.data || []).map((r: any) => ({
