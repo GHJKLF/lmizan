@@ -1,61 +1,204 @@
 
 
-## Redesign Airwallex to Multi-Currency Wallet
+## Complete UI/UX Redesign of Lmizan
 
 ### Overview
-Restructure the Airwallex integration from single-currency-per-connection (like Wise) to multi-currency wallet (one connection = all currencies). This requires a DB migration, edge function rewrite, and Settings UI update.
+A visual-only redesign across the entire application: dark navy sidebar, refined KPI cards, cleaner charts, polished tables, and a restructured Settings page. All existing functionality, data fetching, and business logic remain untouched.
 
-### Part 1 -- Database Migration
+### Scope of Changes
 
-**New migration file** with these changes:
+---
 
-1. Drop `currency`, `balance_available`, `balance_fetched_at` columns from `airwallex_connections`
-2. Create `airwallex_balances` table with columns: `id`, `connection_id` (FK to airwallex_connections), `currency`, `available_amount`, `pending_amount`, `total_amount`, `synced_at`, with a UNIQUE constraint on `(connection_id, currency)`
-3. Enable RLS on `airwallex_balances` with a policy that checks ownership via the parent `airwallex_connections` table
-4. Update `airwallex_connections_safe` view to remove the dropped columns
-5. Update `get_airwallex_connection_with_key` RPC to remove `currency` from return type
+### Part 1: Design System Tokens
 
-### Part 2 -- Edge Function Update
+**File: `src/index.css`**
 
-**File:** `supabase/functions/airwallex-sync/index.ts`
+Replace the `:root` and `.dark` CSS variable blocks with the new design system:
 
-Changes:
-- Remove `conn.currency` fallback from transaction currency mapping (use `t.currency` as-is, default to "EUR" only if missing)
-- Replace the single-currency balance logic (Step 5) with multi-currency upsert:
-  - Fetch ALL balances from `/api/v1/balances/current`
-  - Upsert each balance into `airwallex_balances` with `onConflict: 'connection_id,currency'`
-- Return `{ synced: N, currencies: [...] }` instead of just `{ synced: N }`
+- `--background`: mapped to #F8FAFC (slate-50)
+- `--foreground`: mapped to #0F172A (slate-900)
+- `--card` / `--card-foreground`: white surface + slate-900 text
+- `--primary`: mapped to #6366F1 (indigo-500)
+- `--primary-foreground`: white
+- `--muted` / `--muted-foreground`: slate-100 / #64748B
+- `--border`: mapped to #E2E8F0
+- `--sidebar-background`: #0F172A (dark navy)
+- `--sidebar-foreground`: #94A3B8
+- `--sidebar-primary`: #6366F1 (indigo accent)
+- `--sidebar-accent`: #1E293B (hover/active bg)
+- New custom properties: `--color-inflow: #10B981`, `--color-outflow: #EF4444`, `--color-transfer: #F59E0B`
+- Chart colors updated: chart-1=#6366F1 (indigo), chart-2=#10B981 (green/inflow), chart-3=#EF4444 (red/outflow), chart-4=#8B5CF6, chart-5=#06B6D4
+- Add `font-variant-numeric: tabular-nums` utility for number elements
+- Add Inter font import via Google Fonts in `index.html`
+- Dark mode variables also updated to match the new palette (keeping the dark navy aesthetic consistent)
 
-### Part 3 -- Settings UI Update
+---
 
-**File:** `src/pages/Settings.tsx`
+### Part 2: Sidebar Redesign
 
-Interface changes:
-- Remove `currency`, `balance_available`, `balance_fetched_at` from `AirwallexConnection`
-- Add new `AirwallexBalance` interface with `currency`, `available_amount`, `pending_amount`, `total_amount`, `synced_at`
+**File: `src/components/AppSidebar.tsx`**
 
-State changes:
-- Remove `currency` from `airwallexForm` state
-- Add `airwallexBalances` state as `Record<string, AirwallexBalance[]>` keyed by connection_id
-- In `loadData()`, fetch from `airwallex_balances` table and group by connection_id
+Major visual overhaul (same props interface, same logic):
 
-Form changes:
-- Remove Currency input field from the add connection form
-- Remove `currency` from the insert call in `handleAirwallexAdd`
+- Background: `bg-[#0F172A]` full-height dark navy, width stays 72 (w-72 = 288px, close to 240px spec)
+- Logo: Scale icon in white + "Lmizan" in white Inter 600, "Finance OS" in indigo-400 text below
+- Nav items restyled:
+  - Default: text-[#94A3B8], no background
+  - Hover: bg-[#1E293B], text-[#CBD5E1]
+  - Active: bg-[#1E293B], text-[#F1F5F9], left border 3px solid #6366F1
+  - Remove the current `bg-primary text-primary-foreground shadow-lg` active style
+- Section headers ("PORTFOLIOS", "BANKING", etc.): 10px uppercase, text-[#475569], letter-spacing 0.08em
+- Account sub-items: 13px text, text-[#64748B], remove bullet dots (the colored circle indicators)
+- Portfolio groups: collapsed by default (`expandedGroups` initial state all false)
+- "All Portfolios" item: dark-themed styling to match
+- Footer (Settings + Logout): text-[#94A3B8], above a border-t in #1E293B
+- Context menu + rename modal: keep existing logic, adjust colors for dark overlay
 
-Connection card UI changes:
-- Replace single currency badge + single balance with a flex-wrap grid of currency chips
-- Each chip shows: currency symbol + formatted amount (e.g., `EUR euro60,782`, `USD $7.00`)
-- Currency symbol map: EUR=euro, USD=$, GBP=pound, HKD=HK$, SGD=S$, AUD=A$, CNY=yen, JPY=yen, CHF=CHF, others show 3-letter code
-- If no balances exist for a connection, show "Sync to see balances" in muted text
+---
 
-### Technical Details
+### Part 3: Top Navigation Bar
 
-| File | Change |
-|------|--------|
-| New migration SQL | Drop columns, create airwallex_balances, update view + RPC |
-| `supabase/functions/airwallex-sync/index.ts` | Multi-currency balance upsert, remove single-currency logic |
-| `src/pages/Settings.tsx` | Update interfaces, state, form, and card UI |
+**File: `src/pages/Index.tsx`**
 
-No changes needed in `src/pages/Index.tsx` -- the `handleSyncAll` call already passes `connection_id` without currency, so it works as-is.
+- Wrap action bar in a proper header: bg-white, h-14, border-b border-[#E2E8F0], px-6
+- Left side: page title (h1, 20px, font-weight 600, text-[#0F172A]) showing current view name
+- Right side: compact ghost buttons (h-8, border #E2E8F0, 13px font, rounded-lg)
+- "Import" stays as the only filled indigo button (bg-[#6366F1])
+- "Sync Latest" with dropdown chevron
+- Main content area: bg-[#F8FAFC], padding 24px
+
+---
+
+### Part 4: KPI Cards Redesign
+
+**Files: `src/components/dashboard/LiquidityHeader.tsx`, `src/components/pnl/PnlReport.tsx`, `src/components/equity/EquityDashboard.tsx`, `src/components/dashboard/AccountDashboard.tsx`**
+
+All stat/KPI cards updated to:
+- Border: 1px solid #E2E8F0, border-radius 12px
+- Shadow: `shadow-[0_1px_3px_rgba(0,0,0,0.06),0_1px_2px_rgba(0,0,0,0.04)]`
+- Padding: 20px 24px
+- Label: 11px uppercase, text-[#64748B], letter-spacing 0.05em
+- Icon: right-aligned in a 32px tinted rounded background
+- Number: 36px (text-4xl), font-weight 700, tabular-nums
+- Positive: text-[#10B981], Negative: text-[#EF4444]
+- Subtitle: 13px, text-[#94A3B8]
+
+---
+
+### Part 5: Charts Redesign
+
+**File: `src/components/dashboard/EquityTrendChart.tsx`**
+- Remove CartesianGrid or make stroke #F1F5F9 (very faint)
+- Curve: stroke #6366F1, strokeWidth 2
+- Area gradient: rgba(99,102,241,0.15) to rgba(99,102,241,0)
+- Remove card outer border (or make very subtle)
+- Axis labels: 11px, fill #94A3B8
+
+**File: `src/components/dashboard/CashFlowWaterfall.tsx`**
+- Inflow bars: fill #10B981 (green)
+- Outflow bars: fill #EF4444 (red)
+- Remove CartesianGrid, keep only bottom XAxis line
+- Bar border-radius 4px top
+
+**File: `src/components/dashboard/AccountBreakdown.tsx`**
+- Color palette: ['#6366F1','#8B5CF6','#06B6D4','#10B981','#F59E0B','#94A3B8']
+- Horizontal bars with rounded right corners 4px
+- Left labels: 12px, fill #64748B
+
+---
+
+### Part 6: Data Tables Redesign
+
+**Files: `src/components/transactions/TransactionTable.tsx`, `src/components/dashboard/AnomalySection.tsx`, `src/components/equity/EquityDashboard.tsx` (asset breakdown table), `src/components/pnl/PnlReport.tsx` (monthly table)**
+
+All tables:
+- Header: bg-[#F8FAFC], 11px uppercase text-[#64748B], letter-spacing 0.05em
+- Header bottom: 2px solid #E2E8F0
+- Row height: 48px (py-3)
+- Row border: 1px solid #F1F5F9 (very faint)
+- Hover: bg-[#F8FAFC]
+- Number columns: text-right, tabular-nums, font-weight 500
+- Positive: text-[#10B981] font-weight 600
+- Negative: text-[#EF4444] font-weight 600
+
+---
+
+### Part 7: Badge/Tier Redesign
+
+**Files: `src/components/equity/EquityDashboard.tsx`, `src/components/dashboard/AccountBreakdown.tsx`**
+
+New pill badges (rounded, uppercase 11px, px-2 py-0.5):
+- Bank: bg-[#EEF2FF] text-[#4338CA]
+- Processor: bg-[#F5F3FF] text-[#7C3AED]
+- Asset: bg-[#FFFBEB] text-[#B45309]
+- Crypto: bg-[#FFF7ED] text-[#C2410C]
+
+---
+
+### Part 8: Button Styling
+
+**File: `src/components/ui/button.tsx`**
+
+Update `buttonVariants`:
+- Default (primary): bg-[#6366F1], hover bg-[#4F46E5], text white, rounded-lg (8px)
+- Secondary/outline: bg white, border #E2E8F0, text #374151, hover bg #F9FAFB
+- Destructive: bg #FEF2F2, text #EF4444, border #FEE2E2, hover bg #FEE2E2
+- All: h-9 (36px), px-3.5, text-[13px], font-medium
+
+Action buttons in `Index.tsx` also updated with these styles.
+
+---
+
+### Part 9: Settings Page Redesign
+
+**File: `src/pages/Settings.tsx`**
+
+- Group integrations into collapsible cards:
+  - "Wise Integrations (N)" -- click header to expand/collapse
+  - "PayPal Integrations (N)"
+  - "Stripe Integrations (N)"
+  - "Airwallex Integrations (N)"
+- Default: all collapsed, showing just header with logo/icon + name + count badge
+- Each connection row: 48px, account name + currency badge + last synced, actions right-aligned
+- "Connect" button in card header (top right)
+- Page background: #F8FAFC
+- Back button + page title in top bar style
+
+---
+
+### Part 10: Global Layout
+
+**File: `src/pages/Index.tsx`**
+
+- Outer container: bg-[#F8FAFC]
+- Main content padding: p-6 (24px)
+- Cards are white elevated surfaces on the slate background
+
+---
+
+### Files Modified (Summary)
+
+| File | Changes |
+|------|---------|
+| `index.html` | Add Inter font import |
+| `src/index.css` | New CSS token values |
+| `src/components/ui/button.tsx` | Updated variant styles |
+| `src/components/AppSidebar.tsx` | Dark navy sidebar redesign |
+| `src/pages/Index.tsx` | Top nav bar + layout bg |
+| `src/components/dashboard/LiquidityHeader.tsx` | KPI card styling |
+| `src/components/dashboard/EquityTrendChart.tsx` | Chart colors/grid |
+| `src/components/dashboard/CashFlowWaterfall.tsx` | Chart colors/grid |
+| `src/components/dashboard/AccountBreakdown.tsx` | Bar colors + tier badges |
+| `src/components/dashboard/AccountDashboard.tsx` | KPI card styling |
+| `src/components/dashboard/AnomalySection.tsx` | Table styling |
+| `src/components/transactions/TransactionTable.tsx` | Table styling |
+| `src/components/pnl/PnlReport.tsx` | KPI cards + table styling |
+| `src/components/equity/EquityDashboard.tsx` | KPI cards + table + tier badges |
+| `src/pages/Settings.tsx` | Collapsible integration groups |
+
+### Important Notes
+- Zero changes to data fetching, RPCs, edge functions, or business logic
+- All existing functionality preserved
+- Dark mode CSS variables also updated for consistency
+- Implementation priority: Sidebar -> Layout/Nav -> KPI Cards -> Charts -> Tables -> Badges -> Buttons -> Settings
 
