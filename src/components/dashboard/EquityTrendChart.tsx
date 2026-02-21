@@ -1,5 +1,5 @@
 import React from 'react';
-import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { EquityPoint, formatEUR } from '@/services/balanceEngine';
 import { TrendingUp, TrendingDown } from 'lucide-react';
@@ -17,13 +17,13 @@ const EquityTrendChart: React.FC<Props> = React.memo(({ data }) => {
   const isPositive = change >= 0;
 
   return (
-    <Card className="border-border/60 shadow-sm">
+    <Card className="border-border rounded-xl shadow-[0_1px_3px_rgba(0,0,0,0.06),0_1px_2px_rgba(0,0,0,0.04)]">
       <CardHeader className="pb-2">
         <div className="flex items-center justify-between">
-          <CardTitle className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
+          <CardTitle className="text-[11px] font-semibold text-muted-foreground uppercase tracking-[0.05em]">
             Equity Trend
           </CardTitle>
-          <div className={`flex items-center gap-1 text-sm font-bold ${isPositive ? 'text-emerald-600' : 'text-destructive'}`}>
+          <div className={`flex items-center gap-1 text-sm font-bold ${isPositive ? 'text-[hsl(var(--color-inflow))]' : 'text-destructive'}`}>
             {isPositive ? <TrendingUp size={14} /> : <TrendingDown size={14} />}
             {isPositive ? '+' : ''}{change.toFixed(1)}%
           </div>
@@ -35,22 +35,23 @@ const EquityTrendChart: React.FC<Props> = React.memo(({ data }) => {
             <AreaChart data={data} margin={{ top: 5, right: 5, left: 0, bottom: 0 }}>
               <defs>
                 <linearGradient id="equityGrad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="hsl(var(--chart-1))" stopOpacity={0.3} />
+                  <stop offset="5%" stopColor="hsl(var(--chart-1))" stopOpacity={0.15} />
                   <stop offset="95%" stopColor="hsl(var(--chart-1))" stopOpacity={0} />
                 </linearGradient>
               </defs>
-              <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
               <XAxis
                 dataKey="date"
-                tick={{ fontSize: 10 }}
+                tick={{ fontSize: 11, fill: '#94A3B8' }}
                 tickFormatter={(d) => d.substring(5)}
-                className="fill-muted-foreground"
+                axisLine={false}
+                tickLine={false}
               />
               <YAxis
-                tick={{ fontSize: 10 }}
+                tick={{ fontSize: 11, fill: '#94A3B8' }}
                 tickFormatter={(v) => `€${(v / 1000).toFixed(0)}k`}
-                className="fill-muted-foreground"
                 width={55}
+                axisLine={false}
+                tickLine={false}
               />
               <Tooltip
                 contentStyle={{

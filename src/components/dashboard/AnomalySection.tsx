@@ -20,15 +20,9 @@ interface Props {
 }
 
 const severityConfig = {
-  warning: { label: 'Warning', color: 'bg-yellow-500/15 text-yellow-700 border-yellow-500/30', icon: AlertTriangle },
-  alert: { label: 'Alert', color: 'bg-orange-500/15 text-orange-700 border-orange-500/30', icon: ShieldAlert },
-  critical: { label: 'Critical', color: 'bg-red-500/15 text-red-700 border-red-500/30', icon: ShieldX },
-};
-
-const rowBg = {
-  warning: 'bg-yellow-500/5',
-  alert: 'bg-orange-500/5',
-  critical: 'bg-red-500/5',
+  warning: { label: 'Warning', color: 'bg-[hsl(38_92%_50%/0.1)] text-[hsl(38,92%,50%)] border-[hsl(38_92%_50%/0.3)]', icon: AlertTriangle },
+  alert: { label: 'Alert', color: 'bg-[hsl(25_95%_53%/0.1)] text-[hsl(25,95%,53%)] border-[hsl(25_95%_53%/0.3)]', icon: ShieldAlert },
+  critical: { label: 'Critical', color: 'bg-[hsl(0_84%_60%/0.1)] text-destructive border-destructive/30', icon: ShieldX },
 };
 
 const fmt = (n: number) =>
@@ -70,19 +64,17 @@ const AnomalySection: React.FC<Props> = ({ refreshKey }) => {
   const alerts = anomalies.filter(a => a.status === 'open' && a.severity === 'alert').length;
   const criticals = anomalies.filter(a => a.status === 'open' && a.severity === 'critical').length;
 
-  // Always render the section shell so it's visible on the dashboard
-
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <h3 className="text-sm font-semibold text-foreground tracking-wide uppercase">Anomaly Detection</h3>
+          <h3 className="text-[11px] font-semibold text-muted-foreground tracking-[0.05em] uppercase">Anomaly Detection</h3>
           {openCount > 0 && (
             <span className="text-xs text-muted-foreground">
               {openCount} open
-              {warnings > 0 && <span className="text-yellow-600 ml-1">• {warnings} warning</span>}
-              {alerts > 0 && <span className="text-orange-600 ml-1">• {alerts} alert</span>}
-              {criticals > 0 && <span className="text-red-600 ml-1">• {criticals} critical</span>}
+              {warnings > 0 && <span className="text-[hsl(38,92%,50%)] ml-1">• {warnings} warning</span>}
+              {alerts > 0 && <span className="text-[hsl(25,95%,53%)] ml-1">• {alerts} alert</span>}
+              {criticals > 0 && <span className="text-destructive ml-1">• {criticals} critical</span>}
             </span>
           )}
         </div>
@@ -93,18 +85,18 @@ const AnomalySection: React.FC<Props> = ({ refreshKey }) => {
         </div>
       </div>
 
-      <div className="border border-border rounded-lg overflow-hidden">
+      <div className="border border-border rounded-xl overflow-hidden shadow-[0_1px_3px_rgba(0,0,0,0.06),0_1px_2px_rgba(0,0,0,0.04)]">
         <Table>
           <TableHeader>
-            <TableRow className="hover:bg-transparent">
-              <TableHead className="text-xs">Account</TableHead>
-              <TableHead className="text-xs">Date</TableHead>
-              <TableHead className="text-xs text-right">Expected</TableHead>
-              <TableHead className="text-xs text-right">Actual</TableHead>
-              <TableHead className="text-xs text-right">Gap</TableHead>
-              <TableHead className="text-xs">Severity</TableHead>
-              <TableHead className="text-xs">Status</TableHead>
-              <TableHead className="text-xs text-right">Actions</TableHead>
+            <TableRow className="border-b-2 border-border hover:bg-transparent">
+              <TableHead className="text-[11px] uppercase tracking-[0.05em] text-muted-foreground bg-background">Account</TableHead>
+              <TableHead className="text-[11px] uppercase tracking-[0.05em] text-muted-foreground bg-background">Date</TableHead>
+              <TableHead className="text-[11px] uppercase tracking-[0.05em] text-muted-foreground bg-background text-right">Expected</TableHead>
+              <TableHead className="text-[11px] uppercase tracking-[0.05em] text-muted-foreground bg-background text-right">Actual</TableHead>
+              <TableHead className="text-[11px] uppercase tracking-[0.05em] text-muted-foreground bg-background text-right">Gap</TableHead>
+              <TableHead className="text-[11px] uppercase tracking-[0.05em] text-muted-foreground bg-background">Severity</TableHead>
+              <TableHead className="text-[11px] uppercase tracking-[0.05em] text-muted-foreground bg-background">Status</TableHead>
+              <TableHead className="text-[11px] uppercase tracking-[0.05em] text-muted-foreground bg-background text-right">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -119,12 +111,12 @@ const AnomalySection: React.FC<Props> = ({ refreshKey }) => {
                 const cfg = severityConfig[a.severity];
                 const Icon = cfg.icon;
                 return (
-                  <TableRow key={a.id} className={`${rowBg[a.severity]} hover:opacity-90`}>
+                  <TableRow key={a.id} className="h-12 border-b border-border/30 hover:bg-background">
                     <TableCell className="text-xs font-medium">{a.account}</TableCell>
                     <TableCell className="text-xs">{a.detected_date}</TableCell>
-                    <TableCell className="text-xs text-right font-mono">{fmt(a.expected_balance)}</TableCell>
-                    <TableCell className="text-xs text-right font-mono">{fmt(a.actual_balance)}</TableCell>
-                    <TableCell className="text-xs text-right font-mono font-semibold">
+                    <TableCell className="text-xs text-right font-mono tabular-nums font-medium">{fmt(a.expected_balance)}</TableCell>
+                    <TableCell className="text-xs text-right font-mono tabular-nums font-medium">{fmt(a.actual_balance)}</TableCell>
+                    <TableCell className="text-xs text-right font-mono tabular-nums font-semibold">
                       {a.gap_amount > 0 ? '+' : ''}{fmt(a.gap_amount)}
                       {a.gap_percent != null && (
                         <span className="text-muted-foreground ml-1">({a.gap_percent}%)</span>

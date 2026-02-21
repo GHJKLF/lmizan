@@ -20,22 +20,12 @@ interface Props {
   onBack: () => void;
 }
 
-const PIE_COLORS = [
-  'hsl(var(--chart-1))',
-  'hsl(var(--chart-2))',
-  'hsl(var(--chart-3))',
-  'hsl(var(--chart-4))',
-  'hsl(var(--chart-5))',
-  'hsl(210 60% 60%)',
-  'hsl(330 60% 60%)',
-  'hsl(50 60% 50%)',
-];
+const PIE_COLORS = ['#6366F1', '#10B981', '#EF4444', '#8B5CF6', '#06B6D4', '#F59E0B', '#94A3B8', '#EC4899'];
 
 const AccountDashboard: React.FC<Props> = React.memo(({ account, summaries, transactions, onBack }) => {
   const accountTxs = useMemo(() => transactions.filter((t) => t.account === account), [transactions, account]);
   const isProcessor = summaries.length > 0 && summaries[0].tier === 'PROCESSOR';
 
-  // Fetch Stripe API balance for processor accounts
   const { data: stripeBalance } = useQuery({
     queryKey: ['stripe-balance', account],
     queryFn: async () => {
@@ -63,12 +53,13 @@ const AccountDashboard: React.FC<Props> = React.memo(({ account, summaries, tran
   const monthlyFlows = useMemo(() => computeMonthlyFlows(accountTxs), [accountTxs]);
   const categoryBreakdown = useMemo(() => computeCategoryBreakdown(accountTxs), [accountTxs]);
   const recentTxs = useMemo(
-    () =>
-      [...accountTxs].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).slice(0, 10),
+    () => [...accountTxs].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).slice(0, 10),
     [accountTxs]
   );
 
   const hasApiBalance = stripeBalance?.balance_available != null;
+
+  const kpiCardClass = "border-border rounded-xl shadow-[0_1px_3px_rgba(0,0,0,0.06),0_1px_2px_rgba(0,0,0,0.04)]";
 
   return (
     <div className="space-y-4">
@@ -82,63 +73,60 @@ const AccountDashboard: React.FC<Props> = React.memo(({ account, summaries, tran
 
       <h2 className="text-xl font-bold text-foreground">{account}</h2>
 
-      {/* Per-currency balance cards */}
       {summaries.length > 0 && (
         <div className="space-y-3">
           {summaries.map((summary) => (
             <div key={`${summary.account}-${summary.currency}`}>
-              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
+              <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-[0.05em] mb-2">
                 {summary.currency} Liquidity
               </p>
               <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
-                <Card className="border-border/60">
-                  <CardContent className="p-4">
-                    <p className="text-xs font-semibold text-muted-foreground uppercase">Balance</p>
+                <Card className={kpiCardClass}>
+                  <CardContent className="p-5">
+                    <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-[0.05em]">Balance</p>
                     {hasApiBalance ? (
                       <>
-                        <p className="text-xl font-bold text-foreground mt-1">
+                        <p className="text-2xl font-bold text-foreground mt-1 tabular-nums">
                           {formatEUR((stripeBalance.balance_available ?? 0) + (stripeBalance.balance_pending ?? 0))}
                         </p>
-                        <p className="text-xs text-muted-foreground">
+                        <p className="text-[13px] text-muted-foreground">
                           Available: {formatEUR(stripeBalance.balance_available ?? 0)} · Pending: {formatEUR(stripeBalance.balance_pending ?? 0)}
                         </p>
                       </>
                     ) : (
                       <>
-                        <p className="text-xl font-bold text-foreground mt-1">
+                        <p className="text-2xl font-bold text-foreground mt-1 tabular-nums">
                           {formatAmount(summary.total, summary.currency)}
                         </p>
-                        <p className="text-xs text-muted-foreground">≈ {formatEUR(toEUR(summary.total, summary.currency))}</p>
+                        <p className="text-[13px] text-muted-foreground">≈ {formatEUR(toEUR(summary.total, summary.currency))}</p>
                       </>
                     )}
                   </CardContent>
                 </Card>
-                <Card className="border-border/60">
-                  <CardContent className="p-4">
-                    <p className="text-xs font-semibold text-muted-foreground uppercase">Available</p>
-                    <p className="text-xl font-bold text-foreground mt-1">
+                <Card className={kpiCardClass}>
+                  <CardContent className="p-5">
+                    <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-[0.05em]">Available</p>
+                    <p className="text-2xl font-bold text-foreground mt-1 tabular-nums">
                       {hasApiBalance ? formatEUR(stripeBalance.balance_available ?? 0) : formatAmount(summary.available, summary.currency)}
                     </p>
                   </CardContent>
                 </Card>
-                <Card className="border-border/60">
-                  <CardContent className="p-4">
-                    <p className="text-xs font-semibold text-muted-foreground uppercase">
+                <Card className={kpiCardClass}>
+                  <CardContent className="p-5">
+                    <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-[0.05em]">
                       {hasApiBalance ? 'Pending' : 'Reserved'}
                     </p>
-                    <p className="text-xl font-bold text-foreground mt-1">
+                    <p className="text-2xl font-bold text-foreground mt-1 tabular-nums">
                       {hasApiBalance ? formatEUR(stripeBalance.balance_pending ?? 0) : formatAmount(summary.reserved, summary.currency)}
                     </p>
                   </CardContent>
                 </Card>
                 {transferVolume > 0 && (
-                  <Card className="border-border/60">
-                    <CardContent className="p-4">
-                      <p className="text-xs font-semibold text-muted-foreground uppercase">Transfers</p>
-                      <p className="text-xl font-bold text-primary mt-1">
-                        {formatEUR(transferVolume)}
-                      </p>
-                      <p className="text-xs text-muted-foreground">Pass-through volume</p>
+                  <Card className={kpiCardClass}>
+                    <CardContent className="p-5">
+                      <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-[0.05em]">Transfers</p>
+                      <p className="text-2xl font-bold text-primary mt-1 tabular-nums">{formatEUR(transferVolume)}</p>
+                      <p className="text-[13px] text-muted-foreground">Pass-through volume</p>
                     </CardContent>
                   </Card>
                 )}
@@ -146,29 +134,24 @@ const AccountDashboard: React.FC<Props> = React.memo(({ account, summaries, tran
             </div>
           ))}
 
-          {/* Analytics section */}
           {transferVolume > 0 && (
             <div className="space-y-2">
-              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+              <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-[0.05em]">
                 Analytics (EUR equivalent)
               </p>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <Card className="border-border/60">
-                  <CardContent className="p-4">
-                    <p className="text-xs font-semibold text-muted-foreground uppercase">Net Revenue Processed</p>
-                    <p className="text-xl font-bold text-foreground mt-1">
-                      {formatEUR(netRevenueProcessed)}
-                    </p>
-                    <p className="text-xs text-muted-foreground">Inflow − Outflow</p>
+                <Card className={kpiCardClass}>
+                  <CardContent className="p-5">
+                    <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-[0.05em]">Net Revenue Processed</p>
+                    <p className="text-2xl font-bold text-foreground mt-1 tabular-nums">{formatEUR(netRevenueProcessed)}</p>
+                    <p className="text-[13px] text-muted-foreground">Inflow − Outflow</p>
                   </CardContent>
                 </Card>
-                <Card className="border-border/60">
-                  <CardContent className="p-4">
-                    <p className="text-xs font-semibold text-muted-foreground uppercase">Total Transfers</p>
-                    <p className="text-xl font-bold text-primary mt-1">
-                      {formatEUR(transferVolume)}
-                    </p>
-                    <p className="text-xs text-muted-foreground">Pass-through volume (payouts, reserves)</p>
+                <Card className={kpiCardClass}>
+                  <CardContent className="p-5">
+                    <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-[0.05em]">Total Transfers</p>
+                    <p className="text-2xl font-bold text-primary mt-1 tabular-nums">{formatEUR(transferVolume)}</p>
+                    <p className="text-[13px] text-muted-foreground">Pass-through volume (payouts, reserves)</p>
                   </CardContent>
                 </Card>
               </div>
@@ -179,9 +162,9 @@ const AccountDashboard: React.FC<Props> = React.memo(({ account, summaries, tran
 
       {/* Charts row */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <Card className="border-border/60">
+        <Card className={kpiCardClass}>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
+            <CardTitle className="text-[11px] font-semibold text-muted-foreground uppercase tracking-[0.05em]">
               By Category
             </CardTitle>
           </CardHeader>
@@ -226,9 +209,9 @@ const AccountDashboard: React.FC<Props> = React.memo(({ account, summaries, tran
           </CardContent>
         </Card>
 
-        <Card className="border-border/60">
+        <Card className={kpiCardClass}>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
+            <CardTitle className="text-[11px] font-semibold text-muted-foreground uppercase tracking-[0.05em]">
               Monthly Trend
             </CardTitle>
           </CardHeader>
@@ -236,19 +219,14 @@ const AccountDashboard: React.FC<Props> = React.memo(({ account, summaries, tran
             <div className="h-52">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={monthlyFlows.slice(-8)} margin={{ top: 5, right: 5, left: 0, bottom: 0 }}>
-                  <XAxis dataKey="month" tick={{ fontSize: 10 }} tickFormatter={(m) => m.substring(5)} />
-                  <YAxis tick={{ fontSize: 10 }} tickFormatter={(v) => `€${(v / 1000).toFixed(0)}k`} width={50} />
+                  <XAxis dataKey="month" tick={{ fontSize: 11, fill: '#94A3B8' }} tickFormatter={(m) => m.substring(5)} axisLine={false} tickLine={false} />
+                  <YAxis tick={{ fontSize: 11, fill: '#94A3B8' }} tickFormatter={(v) => `€${(v / 1000).toFixed(0)}k`} width={50} axisLine={false} tickLine={false} />
                   <Tooltip
-                    contentStyle={{
-                      backgroundColor: 'hsl(var(--card))',
-                      border: '1px solid hsl(var(--border))',
-                      borderRadius: '8px',
-                      fontSize: '12px',
-                    }}
+                    contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: '8px', fontSize: '12px' }}
                     formatter={(v: number, name: string) => [formatEUR(v), name === 'inflow' ? 'Inflow' : 'Outflow']}
                   />
-                  <Bar dataKey="inflow" fill="hsl(var(--chart-1))" radius={[3, 3, 0, 0]} />
-                  <Bar dataKey="outflow" fill="hsl(var(--chart-2))" radius={[3, 3, 0, 0]} />
+                  <Bar dataKey="inflow" fill="hsl(var(--color-inflow))" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="outflow" fill="hsl(var(--color-outflow))" radius={[4, 4, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
@@ -257,9 +235,9 @@ const AccountDashboard: React.FC<Props> = React.memo(({ account, summaries, tran
       </div>
 
       {/* Recent transactions */}
-      <Card className="border-border/60">
+      <Card className={kpiCardClass}>
         <CardHeader className="pb-2">
-          <CardTitle className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
+          <CardTitle className="text-[11px] font-semibold text-muted-foreground uppercase tracking-[0.05em]">
             Recent Transactions
           </CardTitle>
         </CardHeader>
@@ -267,33 +245,31 @@ const AccountDashboard: React.FC<Props> = React.memo(({ account, summaries, tran
           {recentTxs.length === 0 ? (
             <p className="text-sm text-muted-foreground py-6 text-center">No transactions found</p>
           ) : (
-            <div className="divide-y divide-border">
+            <div className="divide-y divide-border/50">
               {recentTxs.map((tx) => (
-                <div key={tx.id} className="flex items-center justify-between py-2.5">
+                <div key={tx.id} className="flex items-center justify-between py-3">
                   <div className="flex items-center gap-3 min-w-0">
                     <div
                       className={`p-1.5 rounded-md ${
-                        tx.type === 'Inflow' ? 'bg-emerald-500/10' : tx.type === 'Transfer' ? 'bg-blue-500/10' : 'bg-destructive/10'
+                        tx.type === 'Inflow' ? 'bg-[hsl(var(--color-inflow)/0.1)]' : tx.type === 'Transfer' ? 'bg-[hsl(var(--color-transfer)/0.1)]' : 'bg-[hsl(var(--color-outflow)/0.1)]'
                       }`}
                     >
                       {tx.type === 'Inflow' ? (
-                        <TrendingUp size={14} className="text-emerald-600" />
+                        <TrendingUp size={14} className="text-[hsl(var(--color-inflow))]" />
                       ) : tx.type === 'Transfer' ? (
-                        <ArrowLeft size={14} className="text-blue-500" />
+                        <ArrowLeft size={14} className="text-[hsl(var(--color-transfer))]" />
                       ) : (
-                        <TrendingDown size={14} className="text-destructive" />
+                        <TrendingDown size={14} className="text-[hsl(var(--color-outflow))]" />
                       )}
                     </div>
                     <div className="min-w-0">
                       <p className="text-sm font-medium text-foreground truncate">{tx.description}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {tx.date} · {tx.category}
-                      </p>
+                      <p className="text-xs text-muted-foreground">{tx.date} · {tx.category}</p>
                     </div>
                   </div>
                   <p
-                    className={`text-sm font-semibold whitespace-nowrap ${
-                      tx.type === 'Inflow' ? 'text-emerald-600' : tx.type === 'Transfer' ? 'text-blue-500' : 'text-destructive'
+                    className={`text-sm font-semibold whitespace-nowrap tabular-nums ${
+                      tx.type === 'Inflow' ? 'text-[hsl(var(--color-inflow))]' : tx.type === 'Transfer' ? 'text-[hsl(var(--color-transfer))]' : 'text-[hsl(var(--color-outflow))]'
                     }`}
                   >
                     {tx.type === 'Inflow' ? '+' : tx.type === 'Transfer' ? '↔' : '-'}
