@@ -442,128 +442,61 @@ const Settings: React.FC<SettingsProps> = ({ embedded = false }) => {
             </div>
           ) : (
             <div className="space-y-3">
-              {connections.map((conn) => (
-                <div
-                  key={conn.id}
-                  className="flex items-center justify-between p-4 bg-card border border-border rounded-xl"
-                >
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className="font-semibold text-foreground text-sm">{conn.account_name}</span>
-                      <span className="text-xs px-2 py-0.5 bg-accent rounded-full text-muted-foreground font-medium">
-                        {conn.currency}
-                      </span>
-                    </div>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      Profile: {conn.profile_id} · Balance: {conn.balance_id}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      Last synced: {conn.last_synced_at
-                        ? new Date(conn.last_synced_at).toLocaleString()
-                        : 'Never'}
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-1.5 ml-3">
-                    <Popover>
-                      <PopoverTrigger asChild>
-                        <button
-                          onClick={() => handleViewBalances(conn.id)}
-                          disabled={balancesLoading === conn.id}
-                          className="p-2 text-muted-foreground hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors disabled:opacity-50"
-                          title="View Balances"
-                        >
-                          {balancesLoading === conn.id ? (
-                            <Loader2 size={14} className="animate-spin" />
-                          ) : (
-                            <Eye size={14} />
-                          )}
-                        </button>
-                      </PopoverTrigger>
-                      {balancesData?.connId === conn.id && (
-                        <PopoverContent className="w-64 p-0" align="end">
-                          <div className="p-3 border-b border-border">
-                            <p className="text-xs font-bold text-foreground">Wise Balances</p>
-                          </div>
-                          {balancesData.balances.length === 0 ? (
-                            <p className="p-3 text-xs text-muted-foreground">No balances found.</p>
-                          ) : (
-                            <div className="p-2 space-y-1">
-                              {balancesData.balances.map((b) => (
-                                <div key={b.id} className="flex items-center justify-between px-2 py-1.5 rounded-md hover:bg-accent">
-                                  <span className="text-xs font-medium text-foreground">{b.currency}</span>
-                                  <span className="text-xs font-semibold text-foreground">
-                                    {b.amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                                  </span>
-                                </div>
-                              ))}
-                            </div>
-                          )}
-                        </PopoverContent>
-                      )}
-                    </Popover>
-                    <button
-                      onClick={() => handleTest(conn.id)}
-                      disabled={testingId === conn.id}
-                      className="p-2 text-muted-foreground hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors disabled:opacity-50"
-                      title="Test Connection"
-                    >
-                      {testingId === conn.id ? (
-                        <Loader2 size={14} className="animate-spin" />
-                      ) : (
-                        <CheckCircle size={14} />
-                      )}
-                    </button>
-                    <Popover>
-                      <PopoverTrigger asChild>
-                        <div className="flex items-center">
-                          <button
-                            onClick={() => handleSync(conn.id, false)}
-                            disabled={syncingId === conn.id}
-                            className="p-2 text-muted-foreground hover:text-primary hover:bg-primary/10 rounded-l-lg transition-colors disabled:opacity-50"
-                            title="Sync Now"
-                          >
-                            {syncingId === conn.id ? (
-                              <Loader2 size={14} className="animate-spin" />
-                            ) : (
-                              <RefreshCw size={14} />
-                            )}
-                          </button>
-                          <button
-                            disabled={syncingId === conn.id}
-                            className="p-2 text-muted-foreground hover:text-primary hover:bg-primary/10 rounded-r-lg transition-colors disabled:opacity-50 border-l border-border"
-                            title="Sync options"
-                          >
-                            <ChevronDown size={10} />
-                          </button>
+              {(() => {
+                const groups = connections.reduce((acc, conn) => {
+                  const key = conn.profile_id;
+                  if (!acc[key]) acc[key] = { profileId: conn.profile_id, accountName: conn.account_name, connections: [] };
+                  acc[key].connections.push(conn);
+                  return acc;
+                }, {} as Record<string, { profileId: string; accountName: string; connections: typeof connections }>);
+
+                return Object.values(groups).map(group => {
+                  const lastSynced = group.connections
+                    .map(c => c.last_synced_at)
+                    .filter(Boolean)
+                    .sort()
+                    .pop();
+
+                  return (
+                    <div key={group.profileId} className="flex items-start justify-between p-4 bg-card border border-border rounded-xl">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-2">
+                          <span className="font-semibold text-foreground text-sm">{group.accountName}</span>
                         </div>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-44 p-1" align="end">
+                        <div className="flex flex-wrap gap-1.5 mb-2">
+                          {group.connections.map(conn => (
+                            <span key={conn.id} className="text-xs px-2 py-0.5 bg-accent rounded-full text-muted-foreground font-medium">
+                              {conn.currency}
+                            </span>
+                          ))}
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                          Last synced: {lastSynced ? new Date(lastSynced).toLocaleString() : 'Never'}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-1.5 ml-3">
                         <button
-                          onClick={() => handleSync(conn.id, false)}
-                          disabled={syncingId === conn.id}
-                          className="w-full text-left px-3 py-2 text-xs rounded-md hover:bg-accent text-foreground"
+                          onClick={() => group.connections.forEach(c => handleSync(c.id, false))}
+                          disabled={group.connections.some(c => syncingId === c.id)}
+                          className="p-2 text-muted-foreground hover:text-primary hover:bg-primary/10 rounded-lg transition-colors disabled:opacity-50"
+                          title="Sync Now"
                         >
-                          Sync (incremental)
+                          {group.connections.some(c => syncingId === c.id)
+                            ? <Loader2 size={14} className="animate-spin" />
+                            : <RefreshCw size={14} />}
                         </button>
                         <button
-                          onClick={() => handleSync(conn.id, true)}
-                          disabled={syncingId === conn.id}
-                          className="w-full text-left px-3 py-2 text-xs rounded-md hover:bg-accent text-foreground"
+                          onClick={() => group.connections.forEach(c => handleDelete(c.id))}
+                          className="p-2 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-lg transition-colors"
+                          title="Delete"
                         >
-                          Full Sync (from 2020)
+                          <Trash2 size={14} />
                         </button>
-                      </PopoverContent>
-                    </Popover>
-                    <button
-                      onClick={() => handleDelete(conn.id)}
-                      className="p-2 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-lg transition-colors"
-                      title="Delete"
-                    >
-                      <Trash2 size={14} />
-                    </button>
-                  </div>
-                </div>
-              ))}
+                      </div>
+                    </div>
+                  );
+                });
+              })()}
             </div>
           )}
         </section>
