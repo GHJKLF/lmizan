@@ -121,7 +121,21 @@ export const computeAccountSummaries = (transactions: Transaction[]): AccountSum
     });
   });
 
-  return summaries;
+  const KNOWN_ACCOUNT_PATTERNS = [
+    'stripe', 'paypal', 'wise', 'airwallex', 'worldfirst', 'binance',
+    'asset', 'home', 'car', 'renovation', 'inventory', 'stock', 'aquablade', 'madeco',
+    'grunkauf', 'porteparis', 'youranwei', 'talenhaten', 'me24', 'ecozahar', 'pp',
+    'cih', 'cfg', 'bank', 'payoneer', 'woo',
+  ];
+
+  const isKnownAccount = (name: string) => {
+    const n = name.toLowerCase();
+    return KNOWN_ACCOUNT_PATTERNS.some(p => n.includes(p));
+  };
+
+  return summaries
+    .filter(s => isKnownAccount(s.account))
+    .filter(s => Math.abs(toEUR(s.total, s.currency)) >= 1);
 };
 
 export interface LiquiditySnapshot {
