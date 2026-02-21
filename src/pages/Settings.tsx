@@ -113,7 +113,11 @@ const CURRENCY_SYMBOLS: Record<string, string> = {
 };
 const getCurrencySymbol = (c: string) => CURRENCY_SYMBOLS[c] || `${c} `;
 
-const Settings: React.FC = () => {
+interface SettingsProps {
+  embedded?: boolean;
+}
+
+const Settings: React.FC<SettingsProps> = ({ embedded = false }) => {
   const navigate = useNavigate();
   const [connections, setConnections] = useState<WiseConnection[]>([]);
   const [paypalConnections, setPaypalConnections] = useState<PayPalConnection[]>([]);
@@ -393,21 +397,22 @@ const Settings: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-background">
-      <div className="max-w-4xl mx-auto px-6 py-8">
-        {/* Header */}
-        <div className="flex items-center gap-3 mb-8">
-          <button
-            onClick={() => navigate('/')}
-            className="p-2 hover:bg-accent rounded-lg transition-colors text-muted-foreground hover:text-foreground"
-          >
-            <ArrowLeft size={18} />
-          </button>
-          <div>
-            <h1 className="text-2xl font-bold text-foreground">Settings</h1>
-            <p className="text-sm text-muted-foreground">Manage integrations and connections</p>
+    <div className={embedded ? '' : 'min-h-screen bg-background'}>
+      <div className={embedded ? '' : 'max-w-4xl mx-auto px-6 py-8'}>
+        {!embedded && (
+          <div className="flex items-center gap-3 mb-8">
+            <button
+              onClick={() => navigate('/')}
+              className="p-2 hover:bg-accent rounded-lg transition-colors text-muted-foreground hover:text-foreground"
+            >
+              <ArrowLeft size={18} />
+            </button>
+            <div>
+              <h1 className="text-2xl font-bold text-foreground">Settings</h1>
+              <p className="text-sm text-muted-foreground">Manage integrations and connections</p>
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Wise Integrations */}
         <section className="mb-10">
