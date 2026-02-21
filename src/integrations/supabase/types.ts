@@ -704,13 +704,21 @@ export type Database = {
           user_id: string
         }[]
       }
-      get_equity_trend: {
-        Args: { p_days?: number }
-        Returns: {
-          date: string
-          equity: number
-        }[]
-      }
+      get_equity_trend:
+        | {
+            Args: { p_days?: number }
+            Returns: {
+              date: string
+              equity: number
+            }[]
+          }
+        | {
+            Args: { p_current_equity?: number; p_days?: number }
+            Returns: {
+              date: string
+              equity: number
+            }[]
+          }
       get_monthly_cash_flow: {
         Args: never
         Returns: {
