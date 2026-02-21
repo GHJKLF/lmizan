@@ -94,24 +94,26 @@ const Index: React.FC = () => {
   const loadDashboardData = useCallback(async () => {
     setDashboardLoading(true);
     try {
-      const [dd, wiseRes, paypalRes, stripeRes, airwallexRes] = await Promise.all([
+      const [dd, accsResult, wiseRes, paypalRes, stripeRes, airwallexRes] = await Promise.all([
         DataService.fetchDashboardData(),
+        supabase.from('accounts').select('name'),
         supabase.from('wise_connections_safe' as any).select('account_name'),
         supabase.from('paypal_connections_safe' as any).select('account_name'),
         supabase.from('stripe_connections_safe' as any).select('account_name'),
         supabase.from('airwallex_connections_safe' as any).select('account_name'),
       ]);
 
-      const accs = [
+      const fromTable = (accsResult.data || []).map((r: any) => r.name as string).filter(Boolean);
+      const fromConnections = [
         ...(wiseRes.data || []).map((r: any) => r.account_name as string),
         ...(paypalRes.data || []).map((r: any) => r.account_name as string),
         ...(stripeRes.data || []).map((r: any) => r.account_name as string),
         ...(airwallexRes.data || []).map((r: any) => r.account_name as string),
       ].filter(Boolean);
 
-      const unique = [...new Set(accs)].sort();
+      const accs = [...new Set([...fromTable, ...fromConnections])].sort();
       setDashboardData(dd);
-      setAccounts(unique);
+      setAccounts(accs);
     } catch (e) { console.error('Failed to load dashboard data:', e); } finally { setDashboardLoading(false); }
   }, []);
 
