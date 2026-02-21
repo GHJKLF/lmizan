@@ -94,39 +94,24 @@ const Index: React.FC = () => {
   const loadDashboardData = useCallback(async () => {
     setDashboardLoading(true);
     try {
-      const [dd, accsResult, wiseRes, paypalRes, stripeRes, airwallexRes] = await Promise.all([
+      const [dd, wiseRes, paypalRes, stripeRes, airwallexRes] = await Promise.all([
         DataService.fetchDashboardData(),
-        supabase.from('accounts').select('name'),
         supabase.from('wise_connections_safe' as any).select('account_name'),
         supabase.from('paypal_connections_safe' as any).select('account_name'),
         supabase.from('stripe_connections_safe' as any).select('account_name'),
         supabase.from('airwallex_connections_safe' as any).select('account_name'),
       ]);
 
-      const accsFromTable = (accsResult.data || []).map((r: any) => r.name as string).filter(Boolean);
-      const accsFromConnections = [
+      const accs = [
         ...(wiseRes.data || []).map((r: any) => r.account_name as string),
         ...(paypalRes.data || []).map((r: any) => r.account_name as string),
         ...(stripeRes.data || []).map((r: any) => r.account_name as string),
         ...(airwallexRes.data || []).map((r: any) => r.account_name as string),
       ].filter(Boolean);
 
-      const KNOWN_PATTERNS = [
-        'stripe', 'paypal', 'wise', 'airwallex', 'worldfirst', 'binance',
-        'asset', 'home', 'car', 'renovation', 'inventory', 'stock', 'aquablade', 'madeco',
-        'grunkauf', 'porteparis', 'youranwei', 'talenhaten', 'me24', 'ecozahar', 'pp ',
-        'alison', 'cfg', 'cih', 'ki2', 'attijariwafa', 'payoneer', 'woo',
-      ];
-      const connectionSet = new Set(accsFromConnections.map(a => a.toLowerCase()));
-      const filteredTableAccs = accsFromTable.filter(name => {
-        const n = name.toLowerCase();
-        if (connectionSet.has(n)) return true;
-        return KNOWN_PATTERNS.some(p => n.includes(p));
-      });
-
-      const merged = [...new Set([...accsFromConnections, ...filteredTableAccs])].filter(Boolean).sort();
+      const unique = [...new Set(accs)].sort();
       setDashboardData(dd);
-      setAccounts(merged);
+      setAccounts(unique);
     } catch (e) { console.error('Failed to load dashboard data:', e); } finally { setDashboardLoading(false); }
   }, []);
 
