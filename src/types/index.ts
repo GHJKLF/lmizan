@@ -14,7 +14,7 @@ export enum TransactionType {
   TRANSFER = 'Transfer',
 }
 
-export type ViewState = 'DASHBOARD' | 'TRANSACTIONS' | 'AI_INSIGHTS' | 'PNL' | 'EQUITY';
+export type ViewState = 'DASHBOARD' | 'TRANSACTIONS' | 'AI_INSIGHTS' | 'PNL' | 'EQUITY' | 'SETTINGS';
 
 export interface PnlMonth {
   month: string;
