@@ -12,6 +12,14 @@ interface EquityDashboardProps {
   accountBalances: DashboardAccountBalance[];
 }
 
+const TIER_BADGES: Record<string, { bg: string; text: string; label: string }> = {
+  LIQUID_BANK: { bg: 'bg-[#EEF2FF]', text: 'text-[#4338CA]', label: 'Bank' },
+  PROCESSOR: { bg: 'bg-[#F5F3FF]', text: 'text-[#7C3AED]', label: 'Processor' },
+  ASSET: { bg: 'bg-[#FFFBEB]', text: 'text-[#B45309]', label: 'Asset' },
+};
+
+const kpiCardClass = "border-border rounded-xl shadow-[0_1px_3px_rgba(0,0,0,0.06),0_1px_2px_rgba(0,0,0,0.04)]";
+
 const EquityDashboard: React.FC<EquityDashboardProps> = ({ accountBalances }) => {
   const cutoffDate = useMemo(() => {
     const d = new Date();
@@ -19,7 +27,6 @@ const EquityDashboard: React.FC<EquityDashboardProps> = ({ accountBalances }) =>
     return d.toISOString().split('T')[0];
   }, []);
 
-  // VAT query: sum EUR inflows from last 12 months
   const { data: vatData } = useQuery({
     queryKey: ['equity-vat', cutoffDate],
     queryFn: async () => {
@@ -45,7 +52,6 @@ const EquityDashboard: React.FC<EquityDashboardProps> = ({ accountBalances }) =>
     },
   });
 
-  // Disputes query: outflows matching dispute/chargeback/reversal
   const { data: disputeData } = useQuery({
     queryKey: ['equity-disputes', cutoffDate],
     queryFn: async () => {
@@ -74,83 +80,47 @@ const EquityDashboard: React.FC<EquityDashboardProps> = ({ accountBalances }) =>
     },
   });
 
-  const totalAssets = useMemo(
-    () => accountBalances.reduce((s, a) => s + a.balance_eur, 0),
-    [accountBalances]
-  );
-
+  const totalAssets = useMemo(() => accountBalances.reduce((s, a) => s + a.balance_eur, 0), [accountBalances]);
   const totalLiabilities = (vatData?.vat || 0) + (disputeData?.total || 0);
   const netWorth = totalAssets - totalLiabilities;
   const liabilityRatio = totalAssets > 0 ? (totalLiabilities / totalAssets) * 100 : 0;
 
-  const sortedBalances = useMemo(
-    () => [...accountBalances].sort((a, b) => b.balance_eur - a.balance_eur),
-    [accountBalances]
-  );
+  const sortedBalances = useMemo(() => [...accountBalances].sort((a, b) => b.balance_eur - a.balance_eur), [accountBalances]);
+
+  const kpiCards = [
+    { title: 'Total Assets', value: formatEUR(totalAssets), icon: TrendingUp, accentBg: 'bg-[hsl(160_84%_39%/0.1)]', accentText: 'text-[hsl(160,84%,39%)]' },
+    { title: 'Total Liabilities', value: formatEUR(totalLiabilities), icon: TrendingDown, accentBg: 'bg-[hsl(0_84%_60%/0.1)]', accentText: 'text-[hsl(0,84%,60%)]' },
+    { title: 'Net Worth', value: formatEUR(netWorth), icon: Scale, accentBg: 'bg-primary/10', accentText: 'text-primary', valueColor: netWorth >= 0 ? 'text-[hsl(var(--color-inflow))]' : 'text-destructive' },
+    { title: 'Liabilities / Assets', value: `${liabilityRatio.toFixed(1)}%`, icon: AlertTriangle, accentBg: 'bg-[hsl(38_92%_50%/0.1)]', accentText: 'text-[hsl(38,92%,50%)]' },
+  ];
 
   return (
     <div className="space-y-6">
       <div>
         <h2 className="text-2xl font-bold text-foreground">Balance Sheet</h2>
-        <p className="text-sm text-muted-foreground mt-1">Equity overview and asset breakdown</p>
+        <p className="text-[13px] text-muted-foreground mt-1">Equity overview and asset breakdown</p>
       </div>
 
-      {/* Section 1: Summary Cards */}
+      {/* KPI Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-center gap-3 mb-2">
-              <div className="p-2 rounded-lg bg-emerald-500/10">
-                <TrendingUp size={18} className="text-emerald-500" />
+        {kpiCards.map((card) => (
+          <Card key={card.title} className={kpiCardClass}>
+            <CardContent className="p-5 px-6">
+              <div className="flex items-start justify-between mb-3">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">{card.title}</p>
+                <div className={`p-2 rounded-lg ${card.accentBg}`}>
+                  <card.icon size={18} className={card.accentText} />
+                </div>
               </div>
-              <span className="text-sm font-medium text-muted-foreground">Total Assets</span>
-            </div>
-            <p className="text-2xl font-bold text-foreground">{formatEUR(totalAssets)}</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-center gap-3 mb-2">
-              <div className="p-2 rounded-lg bg-red-500/10">
-                <TrendingDown size={18} className="text-red-500" />
-              </div>
-              <span className="text-sm font-medium text-muted-foreground">Total Liabilities</span>
-            </div>
-            <p className="text-2xl font-bold text-foreground">{formatEUR(totalLiabilities)}</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-center gap-3 mb-2">
-              <div className="p-2 rounded-lg bg-blue-500/10">
-                <Scale size={18} className="text-blue-500" />
-              </div>
-              <span className="text-sm font-medium text-muted-foreground">Net Worth</span>
-            </div>
-            <p className={`text-2xl font-bold ${netWorth >= 0 ? 'text-emerald-500' : 'text-red-500'}`}>
-              {formatEUR(netWorth)}
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-center gap-3 mb-2">
-              <div className="p-2 rounded-lg bg-amber-500/10">
-                <AlertTriangle size={18} className="text-amber-500" />
-              </div>
-              <span className="text-sm font-medium text-muted-foreground">Liabilities / Assets</span>
-            </div>
-            <p className="text-2xl font-bold text-foreground">{liabilityRatio.toFixed(1)}%</p>
-          </CardContent>
-        </Card>
+              <p className={`text-4xl font-bold tabular-nums ${card.valueColor || 'text-foreground'}`}>{card.value}</p>
+            </CardContent>
+          </Card>
+        ))}
       </div>
 
-      {/* Section 2: Liabilities Breakdown */}
+      {/* Liabilities Breakdown */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <Card>
+        <Card className={kpiCardClass}>
           <CardHeader className="pb-3">
             <div className="flex items-center gap-2">
               <Landmark size={16} className="text-muted-foreground" />
@@ -160,11 +130,11 @@ const EquityDashboard: React.FC<EquityDashboardProps> = ({ accountBalances }) =>
           <CardContent className="space-y-3">
             <div className="flex justify-between text-sm">
               <span className="text-muted-foreground">EUR Revenue Base (12m)</span>
-              <span className="font-medium text-foreground">{formatEUR(vatData?.revenue || 0)}</span>
+              <span className="font-medium text-foreground tabular-nums">{formatEUR(vatData?.revenue || 0)}</span>
             </div>
             <div className="flex justify-between text-sm">
               <span className="text-muted-foreground">Estimated VAT (21%)</span>
-              <span className="font-bold text-foreground">{formatEUR(vatData?.vat || 0)}</span>
+              <span className="font-bold text-foreground tabular-nums">{formatEUR(vatData?.vat || 0)}</span>
             </div>
             <p className="text-xs text-muted-foreground pt-2 border-t border-border">
               Estimate only — actual VAT depends on jurisdiction rules
@@ -172,7 +142,7 @@ const EquityDashboard: React.FC<EquityDashboardProps> = ({ accountBalances }) =>
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className={kpiCardClass}>
           <CardHeader className="pb-3">
             <div className="flex items-center gap-2">
               <Shield size={16} className="text-muted-foreground" />
@@ -182,11 +152,11 @@ const EquityDashboard: React.FC<EquityDashboardProps> = ({ accountBalances }) =>
           <CardContent className="space-y-3">
             <div className="flex justify-between text-sm">
               <span className="text-muted-foreground">Dispute Transactions (12m)</span>
-              <span className="font-medium text-foreground">{disputeData?.count || 0}</span>
+              <span className="font-medium text-foreground tabular-nums">{disputeData?.count || 0}</span>
             </div>
             <div className="flex justify-between text-sm">
               <span className="text-muted-foreground">Total Reserved (EUR)</span>
-              <span className="font-bold text-foreground">{formatEUR(disputeData?.total || 0)}</span>
+              <span className="font-bold text-foreground tabular-nums">{formatEUR(disputeData?.total || 0)}</span>
             </div>
             <p className="text-xs text-muted-foreground pt-2 border-t border-border">
               Active dispute exposure (last 12 months)
@@ -195,42 +165,39 @@ const EquityDashboard: React.FC<EquityDashboardProps> = ({ accountBalances }) =>
         </Card>
       </div>
 
-      {/* Section 3: Asset Breakdown Table */}
-      <Card>
+      {/* Asset Breakdown Table */}
+      <Card className={kpiCardClass}>
         <CardHeader className="pb-3">
           <CardTitle className="text-base">Asset Breakdown</CardTitle>
         </CardHeader>
         <CardContent>
           <Table>
             <TableHeader>
-              <TableRow>
-                <TableHead>Account</TableHead>
-                <TableHead>Currency</TableHead>
-                <TableHead className="text-right">Balance (Native)</TableHead>
-                <TableHead className="text-right">Balance (EUR)</TableHead>
-                <TableHead className="text-right">% of Total</TableHead>
-                <TableHead>Tier</TableHead>
+              <TableRow className="border-b-2 border-border hover:bg-transparent">
+                <TableHead className="text-[11px] uppercase tracking-[0.05em] text-muted-foreground bg-background">Account</TableHead>
+                <TableHead className="text-[11px] uppercase tracking-[0.05em] text-muted-foreground bg-background">Currency</TableHead>
+                <TableHead className="text-[11px] uppercase tracking-[0.05em] text-muted-foreground bg-background text-right">Balance (Native)</TableHead>
+                <TableHead className="text-[11px] uppercase tracking-[0.05em] text-muted-foreground bg-background text-right">Balance (EUR)</TableHead>
+                <TableHead className="text-[11px] uppercase tracking-[0.05em] text-muted-foreground bg-background text-right">% of Total</TableHead>
+                <TableHead className="text-[11px] uppercase tracking-[0.05em] text-muted-foreground bg-background">Tier</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {sortedBalances.map((ab) => {
                 const pct = totalAssets > 0 ? (ab.balance_eur / totalAssets) * 100 : 0;
+                const tierConfig = TIER_BADGES[ab.tier] || { bg: 'bg-muted', text: 'text-muted-foreground', label: ab.tier };
                 return (
-                  <TableRow key={`${ab.account}-${ab.currency}`}>
-                    <TableCell className="font-medium">{ab.account}</TableCell>
-                    <TableCell>{ab.currency}</TableCell>
-                    <TableCell className="text-right font-mono">
+                  <TableRow key={`${ab.account}-${ab.currency}`} className="h-12 border-b border-border/30 hover:bg-background">
+                    <TableCell className="font-medium text-sm">{ab.account}</TableCell>
+                    <TableCell className="text-sm">{ab.currency}</TableCell>
+                    <TableCell className="text-right font-mono text-sm tabular-nums font-medium">
                       {new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(ab.total)}
                     </TableCell>
-                    <TableCell className="text-right font-mono">{formatEUR(ab.balance_eur)}</TableCell>
-                    <TableCell className="text-right font-mono">{pct.toFixed(1)}%</TableCell>
+                    <TableCell className="text-right font-mono text-sm tabular-nums font-medium">{formatEUR(ab.balance_eur)}</TableCell>
+                    <TableCell className="text-right font-mono text-sm tabular-nums">{pct.toFixed(1)}%</TableCell>
                     <TableCell>
-                      <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
-                        ab.tier === 'LIQUID_BANK' ? 'bg-emerald-500/10 text-emerald-600' :
-                        ab.tier === 'PROCESSOR' ? 'bg-blue-500/10 text-blue-600' :
-                        'bg-purple-500/10 text-purple-600'
-                      }`}>
-                        {ab.tier === 'LIQUID_BANK' ? 'Bank' : ab.tier === 'PROCESSOR' ? 'Processor' : 'Asset'}
+                      <span className={`text-[11px] font-semibold uppercase px-2 py-0.5 rounded ${tierConfig.bg} ${tierConfig.text}`}>
+                        {tierConfig.label}
                       </span>
                     </TableCell>
                   </TableRow>

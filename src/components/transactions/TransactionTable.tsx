@@ -211,7 +211,7 @@ const TransactionTable: React.FC<Props> = ({ transactions, selectedAccount, onRe
   const inputClass = 'px-2 py-1 text-xs border border-input rounded bg-background focus:outline-none focus:ring-1 focus:ring-ring';
   const selectClass = `${inputClass} appearance-none`;
 
-  const thClass = 'px-3 py-2.5 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider cursor-pointer hover:text-foreground transition-colors select-none';
+  const thClass = 'px-3 py-2.5 text-left text-[11px] font-semibold text-muted-foreground uppercase tracking-[0.05em] cursor-pointer hover:text-foreground transition-colors select-none bg-background';
 
   return (
     <div className="space-y-4">
@@ -340,10 +340,10 @@ const TransactionTable: React.FC<Props> = ({ transactions, selectedAccount, onRe
       )}
 
       {/* Table */}
-      <Card className="border-border/60 overflow-hidden">
+      <Card className="border-border rounded-xl shadow-[0_1px_3px_rgba(0,0,0,0.06),0_1px_2px_rgba(0,0,0,0.04)] overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
-            <thead className="bg-muted/50 border-b border-border">
+            <thead className="border-b-2 border-border">
               <tr>
                 <th className="px-3 py-2.5 w-8">
                   <input
@@ -374,7 +374,7 @@ const TransactionTable: React.FC<Props> = ({ transactions, selectedAccount, onRe
                 <th className="px-3 py-2.5 w-20" />
               </tr>
             </thead>
-            <tbody className="divide-y divide-border">
+            <tbody className="divide-y divide-border/30">
               {paged.length === 0 ? (
                 <tr>
                   <td colSpan={8} className="px-3 py-12 text-center text-muted-foreground">
@@ -388,7 +388,7 @@ const TransactionTable: React.FC<Props> = ({ transactions, selectedAccount, onRe
                   return (
                     <tr
                       key={tx.id}
-                      className={`hover:bg-muted/30 transition-colors ${selected.has(tx.id) ? 'bg-primary/5' : ''}`}
+                      className={`h-12 hover:bg-background transition-colors ${selected.has(tx.id) ? 'bg-primary/5' : ''}`}
                     >
                       <td className="px-3 py-2">
                         <input
@@ -434,7 +434,7 @@ const TransactionTable: React.FC<Props> = ({ transactions, selectedAccount, onRe
                           <input type="number" step="0.01" value={editData.amount ?? 0} onChange={(e) => setEditData((p) => ({ ...p, amount: parseFloat(e.target.value) || 0 }))} className={`${inputClass} w-24 text-right`} />
                         ) : (
                           <span
-                            className={`font-medium cursor-pointer ${tx.type === 'Inflow' ? 'text-emerald-600' : tx.type === 'Transfer' ? 'text-blue-500' : 'text-foreground'}`}
+                            className={`font-semibold tabular-nums cursor-pointer ${tx.type === 'Inflow' ? 'text-[hsl(var(--color-inflow))]' : tx.type === 'Transfer' ? 'text-[hsl(var(--color-transfer))]' : 'text-foreground'}`}
                             onDoubleClick={() => startEdit(tx)}
                           >
                             {tx.type === 'Inflow' ? '+' : tx.type === 'Transfer' ? '↔' : '-'}{formatAmount(tx.amount, tx.currency)}
@@ -462,7 +462,7 @@ const TransactionTable: React.FC<Props> = ({ transactions, selectedAccount, onRe
                             <option value="Transfer">Transfer</option>
                           </select>
                         ) : (
-                          <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${tx.type === 'Inflow' ? 'bg-emerald-500/10 text-emerald-600' : tx.type === 'Transfer' ? 'bg-blue-500/10 text-blue-500' : 'bg-destructive/10 text-destructive'}`}>
+                          <span className={`text-[11px] font-semibold uppercase px-2 py-0.5 rounded ${tx.type === 'Inflow' ? 'bg-[hsl(var(--color-inflow)/0.1)] text-[hsl(var(--color-inflow))]' : tx.type === 'Transfer' ? 'bg-[hsl(var(--color-transfer)/0.1)] text-[hsl(var(--color-transfer))]' : 'bg-destructive/10 text-destructive'}`}>
                             {tx.type}
                           </span>
                         )}

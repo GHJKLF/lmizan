@@ -3,7 +3,6 @@ import {
   LayoutDashboard,
   Receipt,
   MessageSquareText,
-  Wallet,
   Settings,
   TrendingUp,
   Scale,
@@ -14,10 +13,10 @@ import {
   Home,
   ChevronDown,
   ChevronRight,
-  PieChart,
   Pencil,
   X,
   Trash2,
+  Wallet,
 } from 'lucide-react';
 import { ViewState } from '@/types';
 import {
@@ -59,11 +58,11 @@ const categorizeAccount = (name: string) => {
   return 'Banking';
 };
 
-const CATEGORY_CONFIG: Record<string, { icon: React.ElementType; label: string; colorClass: string }> = {
-  Banking: { icon: Building2, label: 'Banking', colorClass: 'text-emerald-600' },
-  Processors: { icon: CreditCard, label: 'Processors', colorClass: 'text-blue-600' },
-  Crypto: { icon: Bitcoin, label: 'Crypto', colorClass: 'text-orange-500' },
-  Assets: { icon: Home, label: 'Fixed Assets', colorClass: 'text-purple-600' },
+const CATEGORY_CONFIG: Record<string, { icon: React.ElementType; label: string }> = {
+  Banking: { icon: Building2, label: 'BANKING' },
+  Processors: { icon: CreditCard, label: 'PROCESSORS' },
+  Crypto: { icon: Bitcoin, label: 'CRYPTO' },
+  Assets: { icon: Home, label: 'FIXED ASSETS' },
 };
 
 const AppSidebar: React.FC<AppSidebarProps> = ({
@@ -78,10 +77,10 @@ const AppSidebar: React.FC<AppSidebarProps> = ({
   onOpenSettings,
 }) => {
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({
-    Banking: true,
-    Processors: true,
-    Crypto: true,
-    Assets: true,
+    Banking: false,
+    Processors: false,
+    Crypto: false,
+    Assets: false,
   });
 
   const [renameModal, setRenameModal] = useState<{ open: boolean; oldName: string; newName: string }>({
@@ -98,7 +97,6 @@ const AppSidebar: React.FC<AppSidebarProps> = ({
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; account: string } | null>(null);
   const contextMenuRef = useRef<HTMLDivElement>(null);
 
-  // Close context menu on outside click
   useEffect(() => {
     const handler = (e: MouseEvent) => {
       if (contextMenuRef.current && !contextMenuRef.current.contains(e.target as Node)) {
@@ -109,12 +107,13 @@ const AppSidebar: React.FC<AppSidebarProps> = ({
     return () => document.removeEventListener('mousedown', handler);
   }, [contextMenu]);
 
-  const navItemClass = (isActive: boolean) =>
-    `flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 cursor-pointer font-medium text-sm ${
-      isActive
-        ? 'bg-primary text-primary-foreground shadow-lg'
-        : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
-    }`;
+  const navItems = [
+    { view: 'DASHBOARD' as ViewState, icon: LayoutDashboard, label: 'Dashboard' },
+    { view: 'PNL' as ViewState, icon: TrendingUp, label: 'P&L' },
+    { view: 'EQUITY' as ViewState, icon: Scale, label: 'Equity' },
+    { view: 'TRANSACTIONS' as ViewState, icon: Receipt, label: 'Transactions' },
+    { view: 'AI_INSIGHTS' as ViewState, icon: MessageSquareText, label: 'AI Analyst' },
+  ];
 
   const groupedAccounts = useMemo(() => {
     const groups: Record<string, string[]> = { Banking: [], Processors: [], Crypto: [], Assets: [] };
@@ -142,66 +141,59 @@ const AppSidebar: React.FC<AppSidebarProps> = ({
 
   return (
     <>
-      <aside className="w-72 bg-card border-r border-border h-screen flex flex-col fixed left-0 top-0 z-20 overflow-y-auto">
-        {/* Header */}
-        <div className="p-6 pb-2">
-          <div className="flex items-center gap-3 mb-6">
-            <div className="w-10 h-10 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-xl flex items-center justify-center text-white shadow-lg shadow-blue-500/30">
-              <PieChart size={20} strokeWidth={2.5} />
-            </div>
+      <aside className="w-60 bg-sidebar h-screen flex flex-col fixed left-0 top-0 z-20 overflow-y-auto">
+        {/* Logo */}
+        <div className="px-5 pt-6 pb-4">
+          <div className="flex items-center gap-2.5">
+            <Scale size={20} className="text-primary" />
             <div>
-              <h1 className="text-xl font-bold text-foreground tracking-tight">Imizan</h1>
-              <p className="text-xs font-medium text-muted-foreground">Finance OS</p>
+              <h1 className="text-lg font-semibold text-sidebar-primary-foreground tracking-tight">Lmizan</h1>
+              <p className="text-[11px] font-medium text-primary">Finance OS</p>
             </div>
           </div>
         </div>
 
-        <div className="flex-1 px-4 pb-4 space-y-6">
-          {/* Main Navigation */}
-          <nav className="space-y-1">
-            <div onClick={() => onNavigate('DASHBOARD')} className={navItemClass(currentView === 'DASHBOARD')}>
-              <LayoutDashboard size={18} />
-              <span>Dashboard</span>
-            </div>
-            <div onClick={() => onNavigate('PNL')} className={navItemClass(currentView === 'PNL')}>
-              <TrendingUp size={18} />
-              <span>P&L</span>
-            </div>
-            <div onClick={() => onNavigate('EQUITY')} className={navItemClass(currentView === 'EQUITY')}>
-              <Scale size={18} />
-              <span>Equity</span>
-            </div>
-            <div onClick={() => onNavigate('TRANSACTIONS')} className={navItemClass(currentView === 'TRANSACTIONS')}>
-              <Receipt size={18} />
-              <span>Transactions</span>
-            </div>
-            <div onClick={() => onNavigate('AI_INSIGHTS')} className={navItemClass(currentView === 'AI_INSIGHTS')}>
-              <MessageSquareText size={18} />
-              <span>AI Analyst</span>
-            </div>
+        {/* Navigation */}
+        <div className="flex-1 px-3 pb-4 space-y-6">
+          <nav className="space-y-0.5">
+            {navItems.map((item) => {
+              const isActive = currentView === item.view;
+              return (
+                <div
+                  key={item.view}
+                  onClick={() => onNavigate(item.view)}
+                  className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-[13px] cursor-pointer transition-colors ${
+                    isActive
+                      ? 'bg-sidebar-accent text-sidebar-primary-foreground border-l-[3px] border-primary pl-[9px]'
+                      : 'text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground'
+                  }`}
+                >
+                  <item.icon size={16} />
+                  <span className="font-medium">{item.label}</span>
+                </div>
+              );
+            })}
           </nav>
 
-          {/* Accounts Section */}
+          {/* Portfolios */}
           <div>
-            <div className="flex items-center justify-between px-2 mb-3">
-              <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Portfolios</span>
-            </div>
+            <p className="px-3 mb-2 text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+              Portfolios
+            </p>
 
             <div
               onClick={() => onSelectAccount('ALL')}
-              className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm cursor-pointer mb-4 transition-colors ${
+              className={`flex items-center gap-2.5 px-3 py-2 rounded-lg text-[13px] cursor-pointer mb-3 transition-colors ${
                 selectedAccount === 'ALL'
-                  ? 'bg-blue-50 text-blue-700 font-semibold border border-blue-100'
-                  : 'text-muted-foreground hover:bg-accent border border-transparent'
+                  ? 'bg-sidebar-accent text-sidebar-primary-foreground font-medium'
+                  : 'text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground'
               }`}
             >
-              <div className="p-1.5 bg-card rounded-md shadow-sm border border-border">
-                <Wallet size={14} className="text-muted-foreground" />
-              </div>
+              <Wallet size={14} />
               All Portfolios
             </div>
 
-            <div className="space-y-4 pb-10">
+            <div className="space-y-3">
               {Object.entries(groupedAccounts).map(([category, categoryAccounts]) => {
                 if (categoryAccounts.length === 0) return null;
                 const Config = CATEGORY_CONFIG[category];
@@ -211,17 +203,14 @@ const AppSidebar: React.FC<AppSidebarProps> = ({
                   <div key={category}>
                     <div
                       onClick={() => toggleGroup(category)}
-                      className="flex items-center justify-between px-2 py-1.5 cursor-pointer text-muted-foreground hover:text-foreground group"
+                      className="flex items-center justify-between px-3 py-1.5 cursor-pointer text-muted-foreground hover:text-sidebar-accent-foreground group"
                     >
-                      <div className="flex items-center gap-2">
-                        <Config.icon size={14} className={Config.colorClass} />
-                        <span className="text-xs font-semibold">{Config.label}</span>
-                      </div>
-                      {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                      <span className="text-[10px] font-semibold uppercase tracking-[0.08em]">{Config.label}</span>
+                      {isExpanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
                     </div>
 
                     {isExpanded && (
-                      <div className="mt-1 space-y-0.5 ml-2 border-l border-border pl-2">
+                      <div className="mt-0.5 space-y-0.5 ml-3">
                         {categoryAccounts.map((account) => (
                           <div
                             key={account}
@@ -230,25 +219,18 @@ const AppSidebar: React.FC<AppSidebarProps> = ({
                               e.preventDefault();
                               setContextMenu({ x: e.clientX, y: e.clientY, account });
                             }}
-                            className={`group flex items-center justify-between px-3 py-2 rounded-md text-sm cursor-pointer transition-all ${
+                            className={`group flex items-center justify-between px-3 py-1.5 rounded-md text-[13px] cursor-pointer transition-colors ${
                               selectedAccount === account
-                                ? 'bg-accent text-foreground font-medium translate-x-1'
-                                : 'text-muted-foreground hover:text-foreground hover:translate-x-1'
+                                ? 'text-sidebar-primary-foreground font-medium'
+                                : 'text-sidebar-foreground hover:text-sidebar-accent-foreground'
                             }`}
                           >
-                            <div className="flex items-center gap-2 truncate">
-                              <div
-                                className={`w-1.5 h-1.5 rounded-full shrink-0 ${
-                                  selectedAccount === account ? 'bg-blue-500' : 'bg-muted-foreground/30'
-                                }`}
-                              />
-                              <span className="truncate">{account}</span>
-                            </div>
+                            <span className="truncate">{account}</span>
                             <div
                               onClick={(e) => openRenameModal(e, account)}
-                              className="opacity-0 group-hover:opacity-100 p-1 hover:bg-card rounded text-muted-foreground hover:text-blue-600 transition-all"
+                              className="opacity-0 group-hover:opacity-100 p-1 hover:bg-sidebar-accent rounded text-sidebar-foreground hover:text-primary transition-all"
                             >
-                              <Pencil size={12} />
+                              <Pencil size={10} />
                             </div>
                           </div>
                         ))}
@@ -262,20 +244,20 @@ const AppSidebar: React.FC<AppSidebarProps> = ({
         </div>
 
         {/* Footer */}
-        <div className="p-4 border-t border-border bg-muted/50">
+        <div className="p-3 border-t border-sidebar-border">
           <div
             onClick={onOpenSettings}
-            className="flex items-center gap-3 px-4 py-2 text-muted-foreground hover:text-foreground cursor-pointer hover:bg-card rounded-lg transition-colors"
+            className="flex items-center gap-3 px-3 py-2 text-sidebar-foreground hover:text-sidebar-accent-foreground cursor-pointer hover:bg-sidebar-accent rounded-lg transition-colors"
           >
-            <Settings size={18} />
-            <span className="text-sm font-medium">Settings</span>
+            <Settings size={16} />
+            <span className="text-[13px] font-medium">Settings</span>
           </div>
           <div
             onClick={onLogout}
-            className="flex items-center gap-3 px-4 py-2 text-muted-foreground hover:text-destructive cursor-pointer hover:bg-destructive/10 rounded-lg transition-colors"
+            className="flex items-center gap-3 px-3 py-2 text-sidebar-foreground hover:text-destructive cursor-pointer hover:bg-destructive/10 rounded-lg transition-colors"
           >
-            <LogOut size={18} />
-            <span className="text-sm font-medium">Logout</span>
+            <LogOut size={16} />
+            <span className="text-[13px] font-medium">Logout</span>
           </div>
         </div>
       </aside>
@@ -360,7 +342,7 @@ const AppSidebar: React.FC<AppSidebarProps> = ({
                 <button
                   type="submit"
                   disabled={!renameModal.newName.trim() || renameModal.newName === renameModal.oldName}
-                  className="px-4 py-2 text-sm font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-lg shadow-lg shadow-blue-500/20 disabled:opacity-50 disabled:shadow-none"
+                  className="px-4 py-2 text-sm font-bold text-primary-foreground bg-primary hover:bg-primary/85 rounded-lg disabled:opacity-50"
                 >
                   Save Changes
                 </button>

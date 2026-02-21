@@ -17,6 +17,14 @@ import SyncProgress from '@/components/SyncProgress';
 import { Upload, Scale, ArrowLeftRight, RefreshCw, Loader2, ChevronDown, ShieldAlert } from 'lucide-react';
 import { toast } from 'sonner';
 
+const VIEW_TITLES: Record<ViewState, string> = {
+  DASHBOARD: 'Dashboard',
+  PNL: 'Profit & Loss',
+  EQUITY: 'Balance Sheet',
+  TRANSACTIONS: 'Transactions',
+  AI_INSIGHTS: 'AI Analyst',
+};
+
 const Index: React.FC = () => {
   const navigate = useNavigate();
   const [currentView, setCurrentView] = useState<ViewState>('DASHBOARD');
@@ -60,54 +68,34 @@ const Index: React.FC = () => {
     try {
       let totalInserted = 0;
 
-      // Sync Wise connections
-      const { data: wiseConns } = await supabase
-        .from('wise_connections')
-        .select('id, account_name');
+      const { data: wiseConns } = await supabase.from('wise_connections').select('id, account_name');
       if (wiseConns && wiseConns.length > 0) {
         for (const conn of wiseConns) {
-          const res = await supabase.functions.invoke('wise-sync', {
-            body: { wise_connection_id: conn.id, full_sync: fullSync },
-          });
+          const res = await supabase.functions.invoke('wise-sync', { body: { wise_connection_id: conn.id, full_sync: fullSync } });
           if (!res.error && res.data) totalInserted += res.data.inserted || 0;
         }
       }
 
-      // Sync PayPal connections
-      const { data: paypalConns } = await supabase
-        .from('paypal_connections' as any)
-        .select('id, account_name');
+      const { data: paypalConns } = await supabase.from('paypal_connections' as any).select('id, account_name');
       if (paypalConns && paypalConns.length > 0) {
         for (const conn of paypalConns as any[]) {
-          const res = await supabase.functions.invoke('paypal-sync', {
-            body: { connection_id: conn.id, full_sync: fullSync },
-          });
+          const res = await supabase.functions.invoke('paypal-sync', { body: { connection_id: conn.id, full_sync: fullSync } });
           if (!res.error && res.data) totalInserted += res.data.synced || 0;
         }
       }
 
-      // Sync Stripe connections
-      const { data: stripeConns } = await supabase
-        .from('stripe_connections' as any)
-        .select('id, account_name');
+      const { data: stripeConns } = await supabase.from('stripe_connections' as any).select('id, account_name');
       if (stripeConns && stripeConns.length > 0) {
         for (const conn of stripeConns as any[]) {
-          const res = await supabase.functions.invoke('stripe-sync', {
-            body: { connection_id: conn.id, full_sync: fullSync },
-          });
+          const res = await supabase.functions.invoke('stripe-sync', { body: { connection_id: conn.id, full_sync: fullSync } });
           if (!res.error && res.data) totalInserted += res.data.synced || 0;
         }
       }
 
-      // Sync Airwallex connections
-      const { data: airwallexConns } = await supabase
-        .from('airwallex_connections_safe' as any)
-        .select('id, account_name');
+      const { data: airwallexConns } = await supabase.from('airwallex_connections_safe' as any).select('id, account_name');
       if (airwallexConns?.length) {
         for (const conn of airwallexConns as any[]) {
-          const res = await supabase.functions.invoke('airwallex-sync', {
-            body: { connection_id: conn.id, full_sync: fullSync },
-          });
+          const res = await supabase.functions.invoke('airwallex-sync', { body: { connection_id: conn.id, full_sync: fullSync } });
           if (!res.error && res.data) totalInserted += res.data.synced || 0;
         }
       }
@@ -117,7 +105,6 @@ const Index: React.FC = () => {
       } else {
         toast.success(`Sync complete: ${totalInserted} new transactions`);
       }
-      // Refresh both dashboard data and invalidate tx cache
       txLoadedRef.current = false;
       await loadDashboardData();
     } catch (err: any) {
@@ -173,8 +160,6 @@ const Index: React.FC = () => {
 
   useEffect(() => {
     loadDashboardData();
-
-    // Fetch running sync sessions
     (async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
@@ -184,23 +169,14 @@ const Index: React.FC = () => {
         .eq('user_id', user.id)
         .eq('status', 'running');
       if (sessions?.length) {
-        // Get account names from connections
         const enriched = await Promise.all(
           sessions.map(async (s: any) => {
             const table =
               s.provider === 'paypal' ? 'paypal_connections_safe' :
               s.provider === 'wise' ? 'wise_connections_safe' :
               'stripe_connections_safe';
-            const { data } = await supabase
-              .from(table)
-              .select('account_name')
-              .eq('id', s.connection_id)
-              .limit(1);
-            return {
-              connection_id: s.connection_id,
-              provider: s.provider,
-              account_name: data?.[0]?.account_name || s.provider,
-            };
+            const { data } = await supabase.from(table).select('account_name').eq('id', s.connection_id).limit(1);
+            return { connection_id: s.connection_id, provider: s.provider, account_name: data?.[0]?.account_name || s.provider };
           })
         );
         setRunningSessions(enriched);
@@ -208,14 +184,12 @@ const Index: React.FC = () => {
     })();
   }, [loadDashboardData]);
 
-  // Lazy-load transactions when navigating to views that need them
   useEffect(() => {
     if ((currentView === 'TRANSACTIONS' || currentView === 'AI_INSIGHTS') && selectedAccount === 'ALL') {
       loadTransactions();
     }
   }, [currentView, selectedAccount, loadTransactions]);
 
-  // Load only selected account's transactions for drill-down
   useEffect(() => {
     if (selectedAccount !== 'ALL') {
       loadAccountTransactions(selectedAccount);
@@ -264,117 +238,123 @@ const Index: React.FC = () => {
         onOpenSettings={() => navigate('/settings')}
       />
 
-      <main className="flex-1 ml-72 p-6 overflow-auto">
-        {/* Action bar */}
-        <div className="flex justify-end gap-2 mb-4">
-          <div className="relative" ref={syncMenuRef}>
-            <div className="flex items-stretch">
-              <button
-                onClick={() => handleSyncAll(false)}
-                disabled={syncing}
-                className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-foreground border border-border border-r-0 hover:bg-accent rounded-l-lg transition-colors disabled:opacity-50"
-              >
-                {syncing ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
-                Sync Latest
-              </button>
-              <button
-                onClick={() => setSyncMenuOpen(!syncMenuOpen)}
-                disabled={syncing}
-                className="flex items-center px-1.5 py-2 text-xs text-foreground border border-border hover:bg-accent rounded-r-lg transition-colors disabled:opacity-50"
-              >
-                <ChevronDown size={12} />
-              </button>
-            </div>
-            {syncMenuOpen && (
-              <div className="absolute right-0 mt-1 w-36 bg-popover border border-border rounded-lg shadow-lg z-50">
+      <div className="flex-1 ml-60 flex flex-col min-h-screen">
+        {/* Top Navigation Bar */}
+        <header className="h-14 bg-card border-b border-border flex items-center justify-between px-6 shrink-0 sticky top-0 z-10">
+          <h1 className="text-xl font-semibold text-foreground">{VIEW_TITLES[currentView]}</h1>
+          <div className="flex items-center gap-2">
+            <div className="relative" ref={syncMenuRef}>
+              <div className="flex items-stretch">
                 <button
-                  onClick={() => handleSyncAll(true)}
-                  className="w-full text-left px-3 py-2 text-xs font-medium text-foreground hover:bg-accent rounded-lg transition-colors"
+                  onClick={() => handleSyncAll(false)}
+                  disabled={syncing}
+                  className="flex items-center gap-1.5 px-3 h-8 text-[13px] font-medium text-foreground border border-border border-r-0 hover:bg-accent rounded-l-lg transition-colors disabled:opacity-50"
                 >
-                  Full Sync
+                  {syncing ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
+                  Sync Latest
+                </button>
+                <button
+                  onClick={() => setSyncMenuOpen(!syncMenuOpen)}
+                  disabled={syncing}
+                  className="flex items-center px-1.5 h-8 text-foreground border border-border hover:bg-accent rounded-r-lg transition-colors disabled:opacity-50"
+                >
+                  <ChevronDown size={12} />
                 </button>
               </div>
-            )}
+              {syncMenuOpen && (
+                <div className="absolute right-0 mt-1 w-36 bg-popover border border-border rounded-lg shadow-lg z-50">
+                  <button
+                    onClick={() => handleSyncAll(true)}
+                    className="w-full text-left px-3 py-2 text-[13px] font-medium text-foreground hover:bg-accent rounded-lg transition-colors"
+                  >
+                    Full Sync
+                  </button>
+                </div>
+              )}
+            </div>
+            <button
+              onClick={async () => {
+                setRunningAnomalyCheck(true);
+                try {
+                  const result = await DataService.runAnomalyDetection();
+                  toast.success(`Anomaly check: ${result.checked} accounts checked, ${result.anomalies_found} found, ${result.auto_resolved} auto-resolved`);
+                  setAnomalyRefreshKey(k => k + 1);
+                } catch (e: any) {
+                  toast.error(e.message || 'Anomaly check failed');
+                } finally {
+                  setRunningAnomalyCheck(false);
+                }
+              }}
+              disabled={runningAnomalyCheck}
+              className="flex items-center gap-1.5 px-3 h-8 text-[13px] font-medium text-foreground border border-border hover:bg-accent rounded-lg transition-colors disabled:opacity-50"
+            >
+              {runningAnomalyCheck ? <Loader2 size={14} className="animate-spin" /> : <ShieldAlert size={14} />}
+              Anomaly Check
+            </button>
+            <button
+              onClick={() => setReconcilerOpen(true)}
+              className="flex items-center gap-1.5 px-3 h-8 text-[13px] font-medium text-foreground border border-border hover:bg-accent rounded-lg transition-colors"
+            >
+              <ArrowLeftRight size={14} />
+              Reconcile
+            </button>
+            <button
+              onClick={() => setBalanceOpen(true)}
+              className="flex items-center gap-1.5 px-3 h-8 text-[13px] font-medium text-foreground border border-border hover:bg-accent rounded-lg transition-colors"
+            >
+              <Scale size={14} />
+              Update Balance
+            </button>
+            <button
+              onClick={() => setImportOpen(true)}
+              className="flex items-center gap-1.5 px-3 h-8 text-[13px] font-medium text-primary-foreground bg-primary hover:bg-primary/85 rounded-lg transition-colors"
+            >
+              <Upload size={14} />
+              Import
+            </button>
           </div>
-          <button
-            onClick={async () => {
-              setRunningAnomalyCheck(true);
-              try {
-                const result = await DataService.runAnomalyDetection();
-                toast.success(`Anomaly check: ${result.checked} accounts checked, ${result.anomalies_found} found, ${result.auto_resolved} auto-resolved`);
-                setAnomalyRefreshKey(k => k + 1);
-              } catch (e: any) {
-                toast.error(e.message || 'Anomaly check failed');
-              } finally {
-                setRunningAnomalyCheck(false);
-              }
-            }}
-            disabled={runningAnomalyCheck}
-            className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-foreground border border-border hover:bg-accent rounded-lg transition-colors disabled:opacity-50"
-          >
-            {runningAnomalyCheck ? <Loader2 size={14} className="animate-spin" /> : <ShieldAlert size={14} />}
-            Anomaly Check
-          </button>
-          <button
-            onClick={() => setReconcilerOpen(true)}
-            className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-foreground border border-border hover:bg-accent rounded-lg transition-colors"
-          >
-            <ArrowLeftRight size={14} />
-            Reconcile
-          </button>
-          <button
-            onClick={() => setBalanceOpen(true)}
-            className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-foreground border border-border hover:bg-accent rounded-lg transition-colors"
-          >
-            <Scale size={14} />
-            Update Balance
-          </button>
-          <button
-            onClick={() => setImportOpen(true)}
-            className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-primary-foreground bg-primary hover:opacity-90 rounded-lg transition-opacity"
-          >
-            <Upload size={14} />
-            Import
-          </button>
-        </div>
+        </header>
 
-        {currentView === 'DASHBOARD' && (
-          <Dashboard
-            dashboardData={dashboardData}
-            transactions={accountTransactions}
-            selectedAccount={selectedAccount}
-            onSelectAccount={setSelectedAccount}
-            loading={dashboardLoading}
-            txLoading={accountTxLoading}
-            anomalyRefreshKey={anomalyRefreshKey}
-          />
-        )}
+        {/* Main Content */}
+        <main className="flex-1 p-6 overflow-auto">
+          {currentView === 'DASHBOARD' && (
+            <Dashboard
+              dashboardData={dashboardData}
+              transactions={accountTransactions}
+              selectedAccount={selectedAccount}
+              onSelectAccount={setSelectedAccount}
+              loading={dashboardLoading}
+              txLoading={accountTxLoading}
+              anomalyRefreshKey={anomalyRefreshKey}
+            />
+          )}
 
-        {currentView === 'TRANSACTIONS' && (
-          <TransactionTable
-            transactions={selectedAccount !== 'ALL' ? accountTransactions : transactions}
-            selectedAccount={selectedAccount}
-            onRefresh={async () => {
-              if (selectedAccount !== 'ALL') {
-                await loadAccountTransactions(selectedAccount);
-              } else {
-                txLoadedRef.current = false;
-                await loadTransactions();
-              }
-            }}
-          />
-        )}
+          {currentView === 'TRANSACTIONS' && (
+            <TransactionTable
+              transactions={selectedAccount !== 'ALL' ? accountTransactions : transactions}
+              selectedAccount={selectedAccount}
+              onRefresh={async () => {
+                if (selectedAccount !== 'ALL') {
+                  await loadAccountTransactions(selectedAccount);
+                } else {
+                  txLoadedRef.current = false;
+                  await loadTransactions();
+                }
+              }}
+            />
+          )}
 
-        {currentView === 'AI_INSIGHTS' && (
-          <AIInsightsView transactions={selectedAccount !== 'ALL' ? accountTransactions : transactions} />
-        )}
+          {currentView === 'AI_INSIGHTS' && (
+            <AIInsightsView transactions={selectedAccount !== 'ALL' ? accountTransactions : transactions} />
+          )}
 
-        {currentView === 'PNL' && <PnlReport />}
+          {currentView === 'PNL' && <PnlReport />}
 
-        {currentView === 'EQUITY' && dashboardData && (
-          <EquityDashboard accountBalances={dashboardData.accountBalances} />
-        )}
-      </main>
+          {currentView === 'EQUITY' && dashboardData && (
+            <EquityDashboard accountBalances={dashboardData.accountBalances} />
+          )}
+        </main>
+      </div>
 
       {/* Modals */}
       <ImportModal transactions={transactions} accounts={accounts} onImportComplete={handleImportComplete} open={importOpen} onClose={() => setImportOpen(false)} />

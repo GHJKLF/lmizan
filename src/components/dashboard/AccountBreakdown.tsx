@@ -8,19 +8,15 @@ interface Props {
   onSelectAccount: (account: string) => void;
 }
 
-const TIER_COLORS: Record<string, string> = {
-  LIQUID_BANK: 'hsl(var(--chart-1))',
-  PROCESSOR: 'hsl(var(--chart-3))',
-  ASSET: 'hsl(var(--chart-4))',
-};
+const BAR_COLORS = ['#6366F1', '#8B5CF6', '#06B6D4', '#10B981', '#F59E0B', '#94A3B8'];
 
 const AccountBreakdown: React.FC<Props> = React.memo(({ data, onSelectAccount }) => {
   const top = data.slice(0, 15);
 
   return (
-    <Card className="border-border/60 shadow-sm">
+    <Card className="border-border rounded-xl shadow-[0_1px_3px_rgba(0,0,0,0.06),0_1px_2px_rgba(0,0,0,0.04)]">
       <CardHeader className="pb-2">
-        <CardTitle className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
+        <CardTitle className="text-[11px] font-semibold text-muted-foreground uppercase tracking-[0.05em]">
           Account Balances (EUR)
         </CardTitle>
       </CardHeader>
@@ -30,16 +26,18 @@ const AccountBreakdown: React.FC<Props> = React.memo(({ data, onSelectAccount })
             <BarChart data={top} layout="vertical" margin={{ top: 0, right: 10, left: 0, bottom: 0 }}>
               <XAxis
                 type="number"
-                tick={{ fontSize: 10 }}
+                tick={{ fontSize: 11, fill: '#94A3B8' }}
                 tickFormatter={(v) => `€${(v / 1000).toFixed(0)}k`}
-                className="fill-muted-foreground"
+                axisLine={false}
+                tickLine={false}
               />
               <YAxis
                 dataKey="account"
                 type="category"
                 width={130}
-                tick={{ fontSize: 10 }}
-                className="fill-muted-foreground"
+                tick={{ fontSize: 12, fill: '#64748B' }}
+                axisLine={false}
+                tickLine={false}
               />
               <Tooltip
                 contentStyle={{
@@ -62,8 +60,8 @@ const AccountBreakdown: React.FC<Props> = React.memo(({ data, onSelectAccount })
                 cursor="pointer"
                 onClick={(data: any) => onSelectAccount(data.account)}
               >
-                {top.map((entry) => (
-                  <Cell key={entry.account} fill={TIER_COLORS[entry.tier] || 'hsl(var(--chart-5))'} />
+                {top.map((_, i) => (
+                  <Cell key={i} fill={BAR_COLORS[i % BAR_COLORS.length]} />
                 ))}
               </Bar>
             </BarChart>
