@@ -737,6 +737,20 @@ export type Database = {
           user_id: string
         }[]
       }
+      get_balance_reconciliation: {
+        Args: never
+        Returns: {
+          account: string
+          api_balance: number
+          api_fetched_at: string
+          computed_balance: number
+          currency: string
+          difference: number
+          difference_pct: number
+          provider: string
+          status: string
+        }[]
+      }
       get_equity_trend:
         | {
             Args: { p_days?: number }
