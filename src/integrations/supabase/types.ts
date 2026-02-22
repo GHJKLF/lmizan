@@ -170,6 +170,39 @@ export type Database = {
         }
         Relationships: []
       }
+      api_balances: {
+        Row: {
+          account: string
+          api_balance: number
+          created_at: string
+          currency: string
+          fetched_at: string
+          id: string
+          provider: string
+          user_id: string
+        }
+        Insert: {
+          account: string
+          api_balance: number
+          created_at?: string
+          currency: string
+          fetched_at?: string
+          id?: string
+          provider: string
+          user_id: string
+        }
+        Update: {
+          account?: string
+          api_balance?: number
+          created_at?: string
+          currency?: string
+          fetched_at?: string
+          id?: string
+          provider?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       paypal_connections: {
         Row: {
           account_name: string
